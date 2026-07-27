@@ -218,8 +218,22 @@ with tab4:
             st.metric("Boyut Kucultme Orani", f"{kirma_sonuc['reduction_ratio']}:1")
             st.info(kirma_sonuc["suggested_configuration"])
             st.caption(kirma_sonuc["note"])
+
+            st.markdown("**Kirici Maliyeti (kendi tedarikci teklifinden)**")
+            kirici_adet = st.number_input(
+                "Kirici Adedi", min_value=1, value=int(kirma_sonuc["suggested_stage_count"]), step=1,
+                help="Varsayilan, yukaridaki asama onerisinden geliyor - istersen degistir",
+            )
+            kirici_fiyat = st.number_input(
+                "Kirici Birim Fiyati ($)", min_value=0.0, value=0.0, step=100000.0,
+                help="Tedarikciden alinan gercek teklif fiyati",
+            )
+            kirici_capex = kirici_adet * kirici_fiyat
+            if kirici_capex > 0:
+                st.metric("Kirma CAPEX", f"${kirici_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
+            kirici_capex = 0.0
 
     with sub2:
         st.subheader("Ogutme Guc Ihtiyaci (Bond Denklemi)")
@@ -244,8 +258,33 @@ with tab4:
             st.metric("Gerekli Guc", f"{ogutme_sonuc['required_power_kw']:,.0f} kW")
             st.caption(f"Spesifik enerji: {ogutme_sonuc['specific_energy_kwh_per_t']} kWh/t")
             st.caption(ogutme_sonuc["note"])
+
+            st.markdown("**Degirmen Maliyeti (kendi tedarikci teklifinden)**")
+            degirmen_adet = st.number_input(
+                "Degirmen Adedi", min_value=1, value=2, step=1,
+                help="Orn. 1x SAG + 1x Bilyali Degirmen icin 2 gir",
+            )
+            degirmen_fiyat = st.number_input(
+                "Degirmen Birim Fiyati ($)", min_value=0.0, value=0.0, step=100000.0,
+                help="Tedarikciden alinan gercek teklif fiyati (hesaplanan gucu karsilayan model icin)",
+            )
+            degirmen_capex = degirmen_adet * degirmen_fiyat
+            if degirmen_capex > 0:
+                st.metric("Ogutme CAPEX", f"${degirmen_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
+            degirmen_capex = 0.0
+
+    toplam_boyut_kucultme_capex = kirici_capex + degirmen_capex
+    if toplam_boyut_kucultme_capex > 0:
+        st.divider()
+        st.subheader("Boyut Kucultme Toplam Ekipman CAPEX")
+        st.metric("Toplam (Kirma + Ogutme)", f"${toplam_boyut_kucultme_capex:,.0f}")
+        st.caption(
+            "Bu, girdigin gercek tedarikci fiyatlarindan hesaplanan 'asagidan-yukari' "
+            "(bottom-up) CAPEX'tir. CAPEX Olcekleme sekmesindeki 'yukaridan-asagi' "
+            "(top-down, guc yasasi) tahminiyle karsilastirarak capraz kontrol yapabilirsin."
+        )
 
     st.divider()
     st.subheader("Referans: Altar Project Ekipman Konfigurasyonu (60,000 tpd)")
@@ -286,21 +325,29 @@ with tab5:
         birim_hucre_hacmi = st.number_input(
             "Birim Hucre Hacmi (m3) - tedarikci katalogundan", min_value=1.0, value=160.0, step=10.0,
         )
+        birim_hucre_fiyat = st.number_input(
+            "Birim Hucre Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
+            help="Tum asamalar icin ayni fiyat varsayilir - farkli boyutlar icin ayri hesap gerekebilir",
+        )
 
     st.divider()
     st.subheader("Devre Asamasi Bazinda Sonuclar")
 
     sonuclar = []
+    toplam_flotasyon_capex = 0.0
     for stage in ALTAR_RETENTION_TIMES:
         try:
             hacim_sonuc = flotation_cell_volume(besleme, stage.retention_time_min, pulp_kati, ozgul_agirlik)
             hucre_sonuc = suggest_cell_count(hacim_sonuc["required_volume_m3"], birim_hucre_hacmi)
+            stage_capex = hucre_sonuc["suggested_cell_count"] * birim_hucre_fiyat
+            toplam_flotasyon_capex += stage_capex
             sonuclar.append({
                 "Asama": stage.stage,
                 "Flotasyon Suresi (dk)": stage.retention_time_min,
                 "Gerekli Hacim (m3)": hacim_sonuc["required_volume_m3"],
                 "Onerilen Hucre Adedi": hucre_sonuc["suggested_cell_count"],
                 "Toplam Kurulu Hacim (m3)": hucre_sonuc["actual_total_volume_m3"],
+                "Asama CAPEX ($)": round(stage_capex, 0),
             })
         except ValueError as e:
             st.error(f"{stage.stage}: {e}")
@@ -312,6 +359,8 @@ with tab5:
             "Flotasyon sureleri kaynagi: Altar PEA, Sekil 17-2 (gercek/dogrulanmis). "
             "Pulp kati orani ve ozgul agirlik tasarim varsayimidir."
         )
+        if toplam_flotasyon_capex > 0:
+            st.metric("Flotasyon Hucreleri Toplam CAPEX", f"${toplam_flotasyon_capex:,.0f}")
 
 # ------------------------------------------------------------------
 # TAB 6: Yogunlastirma / Susuzlastirma
@@ -342,8 +391,13 @@ with tab6:
             st.metric("Gerekli Alan", f"{koyu_sonuc['required_area_m2']:,.0f} m2")
             st.caption(f"Esdeger cap: {koyu_sonuc['equivalent_diameter_m']} m")
             st.caption(koyu_sonuc["note"])
+
+            koyu_fiyat = st.number_input(
+                "Koyulastirici Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
+            )
         except ValueError as e:
             st.error(str(e))
+            koyu_fiyat = 0.0
 
     with sub2:
         st.subheader("Konsantre Filtresi")
@@ -355,8 +409,19 @@ with tab6:
             filtre_sonuc = filter_area(konsantre_debisi, filtrasyon_hizi)
             st.metric("Gerekli Alan", f"{filtre_sonuc['required_area_m2']:,.0f} m2")
             st.caption(filtre_sonuc["note"])
+
+            filtre_fiyat = st.number_input(
+                "Filtre Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
+            )
         except ValueError as e:
             st.error(str(e))
+            filtre_fiyat = 0.0
+
+    toplam_yogunlastirma_capex = koyu_fiyat + filtre_fiyat
+    if toplam_yogunlastirma_capex > 0:
+        st.divider()
+        st.subheader("Yogunlastirma/Susuzlastirma Toplam CAPEX")
+        st.metric("Toplam (Koyulastirici + Filtre)", f"${toplam_yogunlastirma_capex:,.0f}")
 
     st.divider()
     st.subheader("Referans: Altar Project Ekipman Listesi")
