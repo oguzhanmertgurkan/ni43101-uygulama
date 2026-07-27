@@ -219,18 +219,17 @@ with tab4:
             st.info(kirma_sonuc["suggested_configuration"])
             st.caption(kirma_sonuc["note"])
 
-            st.markdown("**Kirici Maliyeti (kendi tedarikci teklifinden)**")
-            kirici_adet = st.number_input(
-                "Kirici Adedi", min_value=1, value=int(kirma_sonuc["suggested_stage_count"]), step=1,
-                help="Varsayilan, yukaridaki asama onerisinden geliyor - istersen degistir",
-            )
-            kirici_fiyat = st.number_input(
-                "Kirici Birim Fiyati ($)", min_value=0.0, value=0.0, step=100000.0,
-                help="Tedarikciden alinan gercek teklif fiyati",
-            )
-            kirici_capex = kirici_adet * kirici_fiyat
+            st.markdown("**Kirici Maliyeti - her asama icin ayri (farkli ekipman tipi, farkli fiyat)**")
+            asama_isimleri = ["Birincil (Gyratory/Jaw)", "Ikincil (Cone)", "Ucuncul (Cone/HPGR)"]
+            kirici_capex = 0.0
+            for i in range(kirma_sonuc["suggested_stage_count"]):
+                asama_adi = asama_isimleri[i] if i < len(asama_isimleri) else f"Asama {i+1}"
+                c1, c2 = st.columns(2)
+                adet = c1.number_input(f"{asama_adi} - Adet", min_value=1, value=1, step=1, key=f"kirici_adet_{i}")
+                fiyat = c2.number_input(f"{asama_adi} - Fiyat ($)", min_value=0.0, value=0.0, step=50000.0, key=f"kirici_fiyat_{i}")
+                kirici_capex += adet * fiyat
             if kirici_capex > 0:
-                st.metric("Kirma CAPEX", f"${kirici_capex:,.0f}")
+                st.metric("Kirma CAPEX (Toplam)", f"${kirici_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
             kirici_capex = 0.0
@@ -255,22 +254,26 @@ with tab4:
 
         try:
             ogutme_sonuc = bond_grinding_power_kw(tph, wi, f80, p80)
-            st.metric("Gerekli Guc", f"{ogutme_sonuc['required_power_kw']:,.0f} kW")
+            st.metric("Gerekli Toplam Guc (SAG+Bilyali+Regrind)", f"{ogutme_sonuc['required_power_kw']:,.0f} kW")
             st.caption(f"Spesifik enerji: {ogutme_sonuc['specific_energy_kwh_per_t']} kWh/t")
             st.caption(ogutme_sonuc["note"])
+            st.caption(
+                "NOT: Bond hesabi devrenin TOPLAM gucunu verir, SAG/Bilyali/Regrind "
+                "arasindaki guc paylasimini ayirmaz - bu, detayli devre tasarimi "
+                "gerektiren ayri bir muhendislik karari. Asagida her ekipmani "
+                "kendi tedarikci teklifinle ayri ayri fiyatlandirabilirsin."
+            )
 
-            st.markdown("**Degirmen Maliyeti (kendi tedarikci teklifinden)**")
-            degirmen_adet = st.number_input(
-                "Degirmen Adedi", min_value=1, value=2, step=1,
-                help="Orn. 1x SAG + 1x Bilyali Degirmen icin 2 gir",
-            )
-            degirmen_fiyat = st.number_input(
-                "Degirmen Birim Fiyati ($)", min_value=0.0, value=0.0, step=100000.0,
-                help="Tedarikciden alinan gercek teklif fiyati (hesaplanan gucu karsilayan model icin)",
-            )
-            degirmen_capex = degirmen_adet * degirmen_fiyat
+            st.markdown("**Degirmen Maliyeti - her ekipman icin ayri**")
+            degirmen_tipleri = ["SAG Degirmen", "Bilyali Degirmen", "Regrind (Kule Degirmen)"]
+            degirmen_capex = 0.0
+            for i, tip in enumerate(degirmen_tipleri):
+                c1, c2 = st.columns(2)
+                adet = c1.number_input(f"{tip} - Adet", min_value=0, value=1, step=1, key=f"degirmen_adet_{i}")
+                fiyat = c2.number_input(f"{tip} - Fiyat ($)", min_value=0.0, value=0.0, step=50000.0, key=f"degirmen_fiyat_{i}")
+                degirmen_capex += adet * fiyat
             if degirmen_capex > 0:
-                st.metric("Ogutme CAPEX", f"${degirmen_capex:,.0f}")
+                st.metric("Ogutme CAPEX (Toplam)", f"${degirmen_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
             degirmen_capex = 0.0
@@ -301,10 +304,13 @@ with tab4:
 with tab5:
     st.header("Flotasyon Hucresi Boyutlandirma")
     st.markdown(
-        "Standart pulp hacim hesabi (Wills' Mineral Processing Technology) "
-        "ile gerekli hucre hacmini hesaplar. Flotasyon sureleri Altar PEA'dan "
-        "(Sekil 17-2) **gercek/dogrulanmis** veri; pulp kati orani ve cevher "
-        "ozgul agirligi tasarim varsayimidir - kendi degerlerinle degistir."
+        "**Gerekli Hacim (m3)** kolonu OTOMATIK hesaplanir (besleme, pulp "
+        "kati orani, ozgul agirlik ve flotasyon suresinden - standart pulp "
+        "hacim formulu). **Birim Hucre Hacmi** ise farkli bir sey: tedarikci "
+        "kataloğundaki hazir urun boyutu (orn. 'TankCell 160' = 160 m3) - bu "
+        "hesaplanamaz, sen katalogdan sectigin boyutu girersin. Her asama "
+        "(rougher/cleaner) farkli boyutta hucre kullanabilecegi icin bu "
+        "alan asama bazinda ayri ayri."
     )
 
     col1, col2 = st.columns(2)
@@ -322,33 +328,43 @@ with tab5:
             "Cevher Ozgul Agirligi (t/m3)", min_value=1.0, value=2.8, step=0.1,
             help="Tipik bakir porfiri ornegi - kendi numunenin degerini kullan",
         )
-        birim_hucre_hacmi = st.number_input(
-            "Birim Hucre Hacmi (m3) - tedarikci katalogundan", min_value=1.0, value=160.0, step=10.0,
-        )
-        birim_hucre_fiyat = st.number_input(
-            "Birim Hucre Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
-            help="Tum asamalar icin ayni fiyat varsayilir - farkli boyutlar icin ayri hesap gerekebilir",
-        )
 
     st.divider()
     st.subheader("Devre Asamasi Bazinda Sonuclar")
 
     sonuclar = []
     toplam_flotasyon_capex = 0.0
-    for stage in ALTAR_RETENTION_TIMES:
+    for i, stage in enumerate(ALTAR_RETENTION_TIMES):
         try:
             hacim_sonuc = flotation_cell_volume(besleme, stage.retention_time_min, pulp_kati, ozgul_agirlik)
-            hucre_sonuc = suggest_cell_count(hacim_sonuc["required_volume_m3"], birim_hucre_hacmi)
-            stage_capex = hucre_sonuc["suggested_cell_count"] * birim_hucre_fiyat
+
+            st.markdown(f"**{stage.stage}** - Gerekli Hacim (otomatik hesaplanan): "
+                        f"{hacim_sonuc['required_volume_m3']:,.0f} m3")
+            c1, c2, c3 = st.columns(3)
+            birim_hacim_i = c1.number_input(
+                "Birim Hucre Hacmi (m3)", min_value=1.0, value=160.0, step=10.0,
+                key=f"birim_hacim_{i}", help="Tedarikci katalogundan",
+            )
+            birim_fiyat_i = c2.number_input(
+                "Birim Hucre Fiyati ($)", min_value=0.0, value=0.0, step=50000.0,
+                key=f"birim_fiyat_{i}",
+            )
+
+            hucre_sonuc = suggest_cell_count(hacim_sonuc["required_volume_m3"], birim_hacim_i)
+            stage_capex = hucre_sonuc["suggested_cell_count"] * birim_fiyat_i
             toplam_flotasyon_capex += stage_capex
+            c3.metric("Onerilen Adet / CAPEX", f"{hucre_sonuc['suggested_cell_count']} adet",
+                      f"${stage_capex:,.0f}")
+
             sonuclar.append({
                 "Asama": stage.stage,
                 "Flotasyon Suresi (dk)": stage.retention_time_min,
                 "Gerekli Hacim (m3)": hacim_sonuc["required_volume_m3"],
+                "Birim Hucre (m3)": birim_hacim_i,
                 "Onerilen Hucre Adedi": hucre_sonuc["suggested_cell_count"],
-                "Toplam Kurulu Hacim (m3)": hucre_sonuc["actual_total_volume_m3"],
                 "Asama CAPEX ($)": round(stage_capex, 0),
             })
+            st.divider()
         except ValueError as e:
             st.error(f"{stage.stage}: {e}")
 
@@ -357,7 +373,7 @@ with tab5:
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.caption(
             "Flotasyon sureleri kaynagi: Altar PEA, Sekil 17-2 (gercek/dogrulanmis). "
-            "Pulp kati orani ve ozgul agirlik tasarim varsayimidir."
+            "Pulp kati orani, ozgul agirlik ve birim hucre secimi tasarim varsayimidir."
         )
         if toplam_flotasyon_capex > 0:
             st.metric("Flotasyon Hucreleri Toplam CAPEX", f"${toplam_flotasyon_capex:,.0f}")
