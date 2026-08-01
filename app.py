@@ -44,18 +44,18 @@ from dewatering_sizing_model import (
     ALTAR_DEWATERING_REFERENCE,
 )
 
-st.set_page_config(page_title="Flotasyon CAPEX/OPEX Araci", layout="wide")
+st.set_page_config(page_title="Flotasyon CAPEX/OPEX Aracı", layout="wide")
 
-st.title("Flotasyon Tesisi CAPEX/OPEX Karar Destek Araci")
+st.title("Flotasyon Tesisi CAPEX/OPEX Karar Destek Aracı")
 st.caption(
-    "Prototip - NI 43-101 teknik raporlarindan (Aranzazu, Altar, La Mina) "
-    "turetilen modellere dayanir. Sadece dahili test/gelistirme amaclidir."
+    "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, La Mina) "
+    "türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
 )
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
-        "Tenor - Kurtarma", "Reaktif Maliyeti", "CAPEX Olcekleme",
-        "Boyut Kucultme", "Flotasyon Hucresi", "Yogunlastirma/Susuzlastirma",
+        "Tenör - Kurtarma", "Reaktif Maliyeti", "CAPEX Ölçekleme",
+        "Boyut Küçültme", "Flotasyon Hücresi", "Yoğunlaştırma/Susuzlaştırma",
     ]
 )
 
@@ -63,8 +63,8 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
 # TAB 1: Tenor - Kurtarma
 # ------------------------------------------------------------------
 with tab1:
-    st.header("Tenor - Kurtarma Tahmini")
-    st.markdown("Kaynak: **Aranzazu Mine** NI 43-101 (2025), 2024 isletme verisi korelasyonu")
+    st.header("Tenör - Kurtarma Tahmini")
+    st.markdown("Kaynak: **Aranzazu Mine** NI 43-101 (2025), 2024 işletme verisi korelasyonu")
 
     col1, col2 = st.columns([1, 2])
 
@@ -74,7 +74,7 @@ with tab1:
         model = RECOVERY_MODELS[metal]
         varsayilan = (model.valid_grade_min + model.valid_grade_max) / 2
         tenor = st.number_input(
-            f"Tenor ({birim})",
+            f"Tenör ({birim})",
             min_value=0.0,
             value=float(varsayilan),
             step=0.01,
@@ -87,7 +87,7 @@ with tab1:
         if sonuc["extrapolating"]:
             st.warning(sonuc["warning"])
         else:
-            st.success(f"Girilen tenor, test edilen aralik icinde ({model.valid_grade_min}-{model.valid_grade_max} {birim})")
+            st.success(f"Girilen tenör, test edilen aralık içinde ({model.valid_grade_min}-{model.valid_grade_max} {birim})")
         st.caption(f"Kaynak: {sonuc['source']}")
 
 # ------------------------------------------------------------------
@@ -96,19 +96,19 @@ with tab1:
 with tab2:
     st.header("Reaktif Maliyeti")
     st.markdown(
-        "Reaktif **turleri** Altar PEA'dan (Bolum 17.1.3 / Sekil 17-2) dogrulanmis, "
-        "ama **tuketim miktari ve fiyat rapor tarafindan acikca verilmiyor** - "
-        "bu degerleri kendi tedarikci teklifinden gir."
+        "Reaktif **türleri** Altar PEA'dan (Bölüm 17.1.3 / Şekil 17-2) doğrulanmış, "
+        "ama **tüketim miktarı ve fiyat rapor tarafından açıkça verilmiyor** - "
+        "bu değerleri kendi tedarikçi teklifinden gir."
     )
     st.info(
-        "Bu tasarim bilincli: gercek dunyada her sirket kendi tedarikcisinden "
-        "farkli fiyat/tuketim verisi alacak. Uygulama sana hangi reaktif "
-        "turlerine ihtiyacin oldugunu soyler, maliyeti SENIN girdigin sayilarla hesaplar."
+        "Bu tasarım bilinçli: gerçek dünyada her şirket kendi tedarikçisinden "
+        "farklı fiyat/tüketim verisi alacak. Uygulama sana hangi reaktif "
+        "türlerine ihtiyacın olduğunu söyler, maliyeti SENİN girdiğin sayılarla hesaplar."
     )
 
-    kapasite = st.number_input("Gunluk Isleme Kapasitesi (ton/gun)", min_value=1000, value=60000, step=1000)
+    kapasite = st.number_input("Günlük İşleme Kapasitesi (ton/gün)", min_value=1000, value=60000, step=1000)
 
-    st.subheader("Reaktif Verilerini Gir (kendi tedarikci teklifinden)")
+    st.subheader("Reaktif Verilerini Gir (kendi tedarikçi teklifinden)")
     user_inputs = []
     cols = st.columns(2)
     for i, spec in enumerate(COPPER_SULFIDE_FLOTATION_REAGENTS):
@@ -117,7 +117,7 @@ with tab2:
             st.caption(spec.typical_role)
             c1, c2 = st.columns(2)
             tuketim = c1.number_input(
-                "Tuketim (kg/t)", min_value=0.0, value=0.0, step=0.001,
+                "Tüketim (kg/t)", min_value=0.0, value=0.0, step=0.001,
                 format="%.4f", key=f"cons_{spec.name}",
             )
             fiyat = c2.number_input(
@@ -132,31 +132,31 @@ with tab2:
     if user_inputs:
         sonuc = calculate_reagent_cost(daily_tonnage=kapasite, user_inputs=user_inputs)
 
-        st.subheader("Sonuclar")
+        st.subheader("Sonuçlar")
         col1, col2, col3 = st.columns(3)
         col1.metric("Toplam Birim Maliyet", f"${sonuc['total_cost_usd_per_t']:.2f}/ton")
-        col2.metric("Gunluk Toplam", f"${sonuc['total_daily_cost_usd']:,.0f}")
-        col3.metric("Yillik Toplam", f"${sonuc['total_annual_cost_usd']:,.0f}")
+        col2.metric("Günlük Toplam", f"${sonuc['total_daily_cost_usd']:,.0f}")
+        col3.metric("Yıllık Toplam", f"${sonuc['total_annual_cost_usd']:,.0f}")
 
         df = pd.DataFrame(sonuc["line_items"])
         st.dataframe(
             df[["reagent", "consumption_kg_per_t", "unit_price_usd_per_kg", "cost_usd_per_t", "daily_cost_usd"]]
             .rename(columns={
                 "reagent": "Reaktif",
-                "consumption_kg_per_t": "Tuketim (kg/t)",
+                "consumption_kg_per_t": "Tüketim (kg/t)",
                 "unit_price_usd_per_kg": "Birim Fiyat ($/kg)",
                 "cost_usd_per_t": "Maliyet ($/t)",
-                "daily_cost_usd": "Gunluk Maliyet ($)",
+                "daily_cost_usd": "Günlük Maliyet ($)",
             }),
             use_container_width=True,
             hide_index=True,
         )
         st.caption(sonuc["benchmark_note"])
     else:
-        st.warning("Sonuc gormek icin en az 1 reaktif icin tuketim VE fiyat degeri gir.")
+        st.warning("Sonuç görmek için en az 1 reaktif için tüketim VE fiyat değeri gir.")
         st.caption(
-            f"Referans (kirilimsiz): Altar PEA'da toplam isleme maliyeti "
-            f"${ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T}/ton olarak raporlanmisti "
+            f"Referans (kırılımsız): Altar PEA'da toplam işleme maliyeti "
+            f"\\${ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T}/ton olarak raporlanmıştı "
             f"({ALTAR_TOTAL_PROCESSING_OPEX_SOURCE})."
         )
 
@@ -164,22 +164,22 @@ with tab2:
 # TAB 3: CAPEX Olcekleme
 # ------------------------------------------------------------------
 with tab3:
-    st.header("CAPEX Olcekleme (Process Plant)")
+    st.header("CAPEX Ölçekleme (Process Plant)")
     st.markdown(
-        "Kaynak: **Altar Project** (60,000 tpd, $579M) ve **La Mina Project** "
-        "(15,000 tpd, $224.7M) - guc yasasi (six-tenths rule) olceklemesi"
+        "Kaynak: **Altar Project** (60,000 tpd, \\$579M) ve **La Mina Project** "
+        "(15,000 tpd, \\$224.7M) - güç yasası (six-tenths rule) ölçeklemesi"
     )
 
     n = fit_scaling_exponent(LA_MINA_DATA_POINT, ALTAR_DATA_POINT)
-    st.info(f"2 veri noktasindan hesaplanan olcekleme usteli: **n = {n:.4f}** (endustri araligi: 0.6-0.7)")
+    st.info(f"2 veri noktasından hesaplanan ölçekleme üsteli: **n = {n:.4f}** (endüstri aralığı: 0.6-0.7)")
 
-    hedef_kapasite = st.slider("Hedef Kapasite (ton/gun)", min_value=5000, max_value=150000, value=30000, step=1000)
+    hedef_kapasite = st.slider("Hedef Kapasite (ton/gün)", min_value=5000, max_value=150000, value=30000, step=1000)
 
     sonuc = estimate_process_capex(target_capacity_tpd=hedef_kapasite)
 
     col1, col2 = st.columns(2)
     col1.metric("Tahmini Process Plant CAPEX", f"${sonuc['estimated_process_capex_usd']:,.0f}")
-    col2.metric("Kullanilan Referans", sonuc["reference_project"])
+    col2.metric("Kullanılan Referans", sonuc["reference_project"])
 
     st.caption(sonuc["note"])
 
@@ -190,82 +190,82 @@ with tab3:
     st.line_chart(egri_df)
 
     st.caption(
-        f"Referans noktalar: Altar ({ALTAR_DATA_POINT.capacity_tpd:,.0f} tpd, "
-        f"${ALTAR_DATA_POINT.process_capex_usd:,.0f}) ve La Mina "
-        f"({LA_MINA_DATA_POINT.capacity_tpd:,.0f} tpd, ${LA_MINA_DATA_POINT.process_capex_usd:,.0f})"
+        f"Referans noktaları: Altar ({ALTAR_DATA_POINT.capacity_tpd:,.0f} tpd, "
+        f"\\${ALTAR_DATA_POINT.process_capex_usd:,.0f}) ve La Mina "
+        f"({LA_MINA_DATA_POINT.capacity_tpd:,.0f} tpd, \\${LA_MINA_DATA_POINT.process_capex_usd:,.0f})"
     )
 
 # ------------------------------------------------------------------
 # TAB 4: Boyut Kucultme (Kirma + Ogutme)
 # ------------------------------------------------------------------
 with tab4:
-    st.header("Boyut Kucultme (Kirma + Ogutme) Boyutlandirma")
+    st.header("Boyut Küçültme (Kırma + Öğütme) Boyutlandırma")
     st.markdown(
-        "Bond denklemi (1952) - evrensel muhendislik formulu - ve genel "
-        "endustri kurallariyla teknik boyutlandirma. Ekipman marka/model "
-        "secimi kapsam disinda; bu sadece TEKNIK ihtiyaci hesaplar."
+        "Bond denklemi (1952) - evrensel mühendislik formülü - ve genel "
+        "endüstri kurallarıyla teknik boyutlandırma. Ekipman marka/model "
+        "seçimi kapsam dışında; bu sadece TEKNİK ihtiyacı hesaplar."
     )
 
     sub1, sub2 = st.columns(2)
 
     with sub1:
-        st.subheader("Kirma Asama Onerisi")
+        st.subheader("Kırma Aşama Önerisi")
         rom = st.number_input("ROM Cevher Boyutu (mm)", min_value=1.0, value=1000.0, step=10.0)
         hedef = st.number_input("Hedef Boyut / SAG Besleme (mm)", min_value=1.0, value=150.0, step=5.0)
 
         try:
             kirma_sonuc = suggest_crushing_stages(rom, hedef)
-            st.metric("Boyut Kucultme Orani", f"{kirma_sonuc['reduction_ratio']}:1")
+            st.metric("Boyut Küçültme Oranı", f"{kirma_sonuc['reduction_ratio']}:1")
             st.info(kirma_sonuc["suggested_configuration"])
             st.caption(kirma_sonuc["note"])
 
-            st.markdown("**Kirici Maliyeti - her asama icin ayri (farkli ekipman tipi, farkli fiyat)**")
-            asama_isimleri = ["Birincil (Gyratory/Jaw)", "Ikincil (Cone)", "Ucuncul (Cone/HPGR)"]
+            st.markdown("**Kırıcı Maliyeti - her aşama için ayrı (farklı ekipman tipi, farklı fiyat)**")
+            asama_isimleri = ["Birincil (Gyratory/Jaw)", "İkincil (Cone)", "Üçüncül (Cone/HPGR)"]
             kirici_capex = 0.0
             for i in range(kirma_sonuc["suggested_stage_count"]):
-                asama_adi = asama_isimleri[i] if i < len(asama_isimleri) else f"Asama {i+1}"
+                asama_adi = asama_isimleri[i] if i < len(asama_isimleri) else f"Aşama {i+1}"
                 c1, c2 = st.columns(2)
                 adet = c1.number_input(f"{asama_adi} - Adet", min_value=1, value=1, step=1, key=f"kirici_adet_{i}")
                 fiyat = c2.number_input(f"{asama_adi} - Fiyat ($)", min_value=0.0, value=0.0, step=50000.0, key=f"kirici_fiyat_{i}")
                 kirici_capex += adet * fiyat
             if kirici_capex > 0:
-                st.metric("Kirma CAPEX (Toplam)", f"${kirici_capex:,.0f}")
+                st.metric("Kırma CAPEX (Toplam)", f"${kirici_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
             kirici_capex = 0.0
 
     with sub2:
-        st.subheader("Ogutme Guc Ihtiyaci (Bond Denklemi)")
+        st.subheader("Öğütme Güç İhtiyacı (Bond Denklemi)")
         tph = st.number_input(
-            "Besleme Miktari (ton/saat)", min_value=1.0, value=2717.0, step=10.0,
+            "Besleme Miktarı (ton/saat)", min_value=1.0, value=2717.0, step=10.0,
             help=(
-                "Varsayilan deger ORNEKTIR: 60,000 tpd / (24h x %92 varsayilan "
-                "kullanilabilirlik) - bu %92 Altar raporundan degil, tipik bir "
-                "endustri varsayimindan geliyor. Kendi projenin gercek "
-                "kullanilabilirlik oranini kullanarak hesapla."
+                "Varsayılan değer ÖRNEKTİR: 60,000 tpd / (24h x %92 varsayılan "
+                "kullanılabilirlik) - bu %92 Altar raporundan değil, tipik bir "
+                "endüstri varsayımından geliyor. Kendi projenin gerçek "
+                "kullanılabilirlik oranını kullanarak hesapla."
             ),
         )
         wi = st.number_input(
-            "Bond Is Indeksi - Wi (kWh/t)", min_value=0.1, value=14.0, step=0.1,
-            help="Laboratuvar Bond testinden gelmeli - buradaki deger sadece ornek",
+            "Bond İş İndeksi - Wi (kWh/t)", min_value=0.1, value=14.0, step=0.1,
+            help="Laboratuvar Bond testinden gelmeli - buradaki değer sadece örnek",
         )
         f80 = st.number_input("Besleme F80 (mikron)", min_value=1.0, value=150000.0, step=1000.0)
-        p80 = st.number_input("Urun P80 (mikron)", min_value=1.0, value=190.0, step=10.0)
+        p80 = st.number_input("Ürün P80 (mikron)", min_value=1.0, value=190.0, step=10.0)
 
         try:
             ogutme_sonuc = bond_grinding_power_kw(tph, wi, f80, p80)
-            st.metric("Gerekli Toplam Guc (SAG+Bilyali+Regrind)", f"{ogutme_sonuc['required_power_kw']:,.0f} kW")
+            st.metric("Gerekli Toplam Güç (SAG+Bilyalı+Regrind)", f"{ogutme_sonuc['required_power_kw']:,.0f} kW")
             st.caption(f"Spesifik enerji: {ogutme_sonuc['specific_energy_kwh_per_t']} kWh/t")
             st.caption(ogutme_sonuc["note"])
             st.caption(
-                "NOT: Bond hesabi devrenin TOPLAM gucunu verir, SAG/Bilyali/Regrind "
-                "arasindaki guc paylasimini ayirmaz - bu, detayli devre tasarimi "
-                "gerektiren ayri bir muhendislik karari. Asagida her ekipmani "
-                "kendi tedarikci teklifinle ayri ayri fiyatlandirabilirsin."
+                "NOT: Bond hesabı devrenin TOPLAM gücünü verir, SAG/Bilyalı/Regrind "
+                "arasındaki güç paylaşımını ayırmaz - bu, detaylı devre tasarımı "
+                "gerektiren ayrı bir mühendislik kararı. Aşağıda her ekipmanı "
+                "kendi tedarikçi teklifinle ayrı ayrı fiyatlandırabilirsin."
             )
 
-            st.markdown("**Degirmen Maliyeti - her ekipman icin ayri**")
-            degirmen_tipleri = ["SAG Degirmen", "Bilyali Degirmen", "Regrind (Kule Degirmen)"]
+            st.markdown("**Değirmen Maliyeti - her ekipman için ayrı**")
+            degirmen_tipleri = ["SAG Değirmen", "Bilyalı Değirmen", "Regrind (Kule Değirmen)"]
             degirmen_capex = 0.0
             for i, tip in enumerate(degirmen_tipleri):
                 c1, c2 = st.columns(2)
@@ -273,7 +273,7 @@ with tab4:
                 fiyat = c2.number_input(f"{tip} - Fiyat ($)", min_value=0.0, value=0.0, step=50000.0, key=f"degirmen_fiyat_{i}")
                 degirmen_capex += adet * fiyat
             if degirmen_capex > 0:
-                st.metric("Ogutme CAPEX (Toplam)", f"${degirmen_capex:,.0f}")
+                st.metric("Öğütme CAPEX (Toplam)", f"${degirmen_capex:,.0f}")
         except ValueError as e:
             st.error(str(e))
             degirmen_capex = 0.0
@@ -281,17 +281,17 @@ with tab4:
     toplam_boyut_kucultme_capex = kirici_capex + degirmen_capex
     if toplam_boyut_kucultme_capex > 0:
         st.divider()
-        st.subheader("Boyut Kucultme Toplam Ekipman CAPEX")
-        st.metric("Toplam (Kirma + Ogutme)", f"${toplam_boyut_kucultme_capex:,.0f}")
+        st.subheader("Boyut Küçültme Toplam Ekipman CAPEX")
+        st.metric("Toplam (Kırma + Öğütme)", f"${toplam_boyut_kucultme_capex:,.0f}")
         st.caption(
-            "Bu, girdigin gercek tedarikci fiyatlarindan hesaplanan 'asagidan-yukari' "
-            "(bottom-up) CAPEX'tir. CAPEX Olcekleme sekmesindeki 'yukaridan-asagi' "
-            "(top-down, guc yasasi) tahminiyle karsilastirarak capraz kontrol yapabilirsin."
+            "Bu, girdiğin gerçek tedarikçi fiyatlarından hesaplanan 'aşağıdan-yukarı' "
+            "(bottom-up) CAPEX'tir. CAPEX Ölçekleme sekmesindeki 'yukarıdan-aşağı' "
+            "(top-down, güç yasası) tahminiyle karşılaştırarak çapraz kontrol yapabilirsin."
         )
 
     st.divider()
-    st.subheader("Referans: Altar Project Ekipman Konfigurasyonu (60,000 tpd)")
-    st.caption("Bu, GERCEK ve dogrulanmis rapor verisidir - karsilastirma/benchmark amaclidir.")
+    st.subheader("Referans: Altar Project Ekipman Konfigürasyonu (60,000 tpd)")
+    st.caption("Bu, GERÇEK ve doğrulanmış rapor verisidir - karşılaştırma/benchmark amaçlıdır.")
     ref_df = pd.DataFrame([
         {"Ekipman": eq.equipment_type, "Spesifikasyon": eq.specification, "Kaynak": eq.source}
         for eq in ALTAR_EQUIPMENT_REFERENCE
@@ -302,35 +302,35 @@ with tab4:
 # TAB 5: Flotasyon Hucresi Boyutlandirma
 # ------------------------------------------------------------------
 with tab5:
-    st.header("Flotasyon Hucresi Boyutlandirma")
+    st.header("Flotasyon Hücresi Boyutlandırma")
     st.markdown(
-        "**Gerekli Hacim (m3)** kolonu OTOMATIK hesaplanir (besleme, pulp "
-        "kati orani, ozgul agirlik ve flotasyon suresinden - standart pulp "
-        "hacim formulu). **Birim Hucre Hacmi** ise farkli bir sey: tedarikci "
-        "kataloğundaki hazir urun boyutu (orn. 'TankCell 160' = 160 m3) - bu "
-        "hesaplanamaz, sen katalogdan sectigin boyutu girersin. Her asama "
-        "(rougher/cleaner) farkli boyutta hucre kullanabilecegi icin bu "
-        "alan asama bazinda ayri ayri."
+        "**Gerekli Hacim (m3)** kolonu OTOMATİK hesaplanır (besleme, pulp "
+        "katı oranı, özgül ağırlık ve flotasyon süresinden - standart pulp "
+        "hacim formülü). **Birim Hücre Hacmi** ise farklı bir şey: tedarikçi "
+        "kataloğundaki hazır ürün boyutu (örn. 'TankCell 160' = 160 m3) - bu "
+        "hesaplanamaz, sen katalogdan seçtiğin boyutu girersin. Her aşama "
+        "(rougher/cleaner) farklı boyutta hücre kullanabileceği için bu "
+        "alan aşama bazında ayrı ayrı."
     )
 
     col1, col2 = st.columns(2)
     with col1:
         besleme = st.number_input(
-            "Besleme Miktari (ton/saat)", min_value=1.0, value=2717.0, step=10.0,
+            "Besleme Miktarı (ton/saat)", min_value=1.0, value=2717.0, step=10.0,
             key="flot_besleme",
         )
         pulp_kati = st.number_input(
-            "Pulp Kati Orani (%)", min_value=1.0, max_value=99.0, value=35.0, step=1.0,
-            help="Tipik ornek deger - Altar raporunda asama bazinda acikca verilmiyor",
+            "Pulp Katı Oranı (%)", min_value=1.0, max_value=99.0, value=35.0, step=1.0,
+            help="Tipik örnek değer - Altar raporunda aşama bazında açıkça verilmiyor",
         )
     with col2:
         ozgul_agirlik = st.number_input(
-            "Cevher Ozgul Agirligi (t/m3)", min_value=1.0, value=2.8, step=0.1,
-            help="Tipik bakir porfiri ornegi - kendi numunenin degerini kullan",
+            "Cevher Özgül Ağırlığı (t/m3)", min_value=1.0, value=2.8, step=0.1,
+            help="Tipik bakır porfiri örneği - kendi numunenin değerini kullan",
         )
 
     st.divider()
-    st.subheader("Devre Asamasi Bazinda Sonuclar")
+    st.subheader("Devre Aşaması Bazında Sonuçlar")
 
     sonuclar = []
     toplam_flotasyon_capex = 0.0
@@ -342,27 +342,27 @@ with tab5:
                         f"{hacim_sonuc['required_volume_m3']:,.0f} m3")
             c1, c2, c3 = st.columns(3)
             birim_hacim_i = c1.number_input(
-                "Birim Hucre Hacmi (m3)", min_value=1.0, value=160.0, step=10.0,
-                key=f"birim_hacim_{i}", help="Tedarikci katalogundan",
+                "Birim Hücre Hacmi (m3)", min_value=1.0, value=160.0, step=10.0,
+                key=f"birim_hacim_{i}", help="Tedarikçi kataloğundan",
             )
             birim_fiyat_i = c2.number_input(
-                "Birim Hucre Fiyati ($)", min_value=0.0, value=0.0, step=50000.0,
+                "Birim Hücre Fiyatı ($)", min_value=0.0, value=0.0, step=50000.0,
                 key=f"birim_fiyat_{i}",
             )
 
             hucre_sonuc = suggest_cell_count(hacim_sonuc["required_volume_m3"], birim_hacim_i)
             stage_capex = hucre_sonuc["suggested_cell_count"] * birim_fiyat_i
             toplam_flotasyon_capex += stage_capex
-            c3.metric("Onerilen Adet / CAPEX", f"{hucre_sonuc['suggested_cell_count']} adet",
+            c3.metric("Önerilen Adet / CAPEX", f"{hucre_sonuc['suggested_cell_count']} adet",
                       f"${stage_capex:,.0f}")
 
             sonuclar.append({
-                "Asama": stage.stage,
-                "Flotasyon Suresi (dk)": stage.retention_time_min,
+                "Aşama": stage.stage,
+                "Flotasyon Süresi (dk)": stage.retention_time_min,
                 "Gerekli Hacim (m3)": hacim_sonuc["required_volume_m3"],
-                "Birim Hucre (m3)": birim_hacim_i,
-                "Onerilen Hucre Adedi": hucre_sonuc["suggested_cell_count"],
-                "Asama CAPEX ($)": round(stage_capex, 0),
+                "Birim Hücre (m3)": birim_hacim_i,
+                "Önerilen Hücre Adedi": hucre_sonuc["suggested_cell_count"],
+                "Aşama CAPEX ($)": round(stage_capex, 0),
             })
             st.divider()
         except ValueError as e:
@@ -372,44 +372,44 @@ with tab5:
         df = pd.DataFrame(sonuclar)
         st.dataframe(df, use_container_width=True, hide_index=True)
         st.caption(
-            "Flotasyon sureleri kaynagi: Altar PEA, Sekil 17-2 (gercek/dogrulanmis). "
-            "Pulp kati orani, ozgul agirlik ve birim hucre secimi tasarim varsayimidir."
+            "Flotasyon süreleri kaynağı: Altar PEA, Şekil 17-2 (gerçek/doğrulanmış). "
+            "Pulp katı oranı, özgül ağırlık ve birim hücre seçimi tasarım varsayımıdır."
         )
         if toplam_flotasyon_capex > 0:
-            st.metric("Flotasyon Hucreleri Toplam CAPEX", f"${toplam_flotasyon_capex:,.0f}")
+            st.metric("Flotasyon Hücreleri Toplam CAPEX", f"${toplam_flotasyon_capex:,.0f}")
 
 # ------------------------------------------------------------------
 # TAB 6: Yogunlastirma / Susuzlastirma
 # ------------------------------------------------------------------
 with tab6:
-    st.header("Yogunlastirma / Susuzlastirma Boyutlandirma")
+    st.header("Yoğunlaştırma / Susuzlaştırma Boyutlandırma")
     st.markdown(
-        "Konsantre koyulastirici ve filtre icin standart alan hesabi. "
-        "Altar PEA'da bu ekipmanlarin **varligi** dogrulanmis (Bolum 17.1.4/17.1.5) "
-        "ama alan/kapasite degerleri raporda acikca verilmiyor - bu yuzden "
-        "sonuclar tamamen SENIN girdigin test verisine bagli."
+        "Konsantre koyulaştırıcı ve filtre için standart alan hesabı. "
+        "Altar PEA'da bu ekipmanların **varlığı** doğrulanmış (Bölüm 17.1.4/17.1.5) "
+        "ama alan/kapasite değerleri raporda açıkça verilmiyor - bu yüzden "
+        "sonuçlar tamamen SENİN girdiğin test verisine bağlı."
     )
 
     sub1, sub2 = st.columns(2)
 
     with sub1:
-        st.subheader("Konsantre Koyulastirici")
+        st.subheader("Konsantre Koyulaştırıcı")
         konsantre_debisi = st.number_input(
-            "Konsantre Kati Debisi (ton/saat)", min_value=0.1, value=145.0, step=1.0,
-            help="Kutle dengesinden hesaplanmali: Besleme x Tenor x Kurtarma / Konsantre Tenoru",
+            "Konsantre Katı Debisi (ton/saat)", min_value=0.1, value=145.0, step=1.0,
+            help="Kütle dengesinden hesaplanmalı: Besleme x Tenör x Kurtarma / Konsantre Tenörü",
         )
         birim_alan = st.number_input(
-            "Birim Alan Yuk Orani (kg/m2/saat)", min_value=1.0, value=800.0, step=10.0,
-            help="Cokelme (settling) test sonucundan gelmeli - buradaki deger sadece ornek",
+            "Birim Alan Yük Oranı (kg/m2/saat)", min_value=1.0, value=800.0, step=10.0,
+            help="Çökelme (settling) test sonucundan gelmeli - buradaki değer sadece örnek",
         )
         try:
             koyu_sonuc = thickener_area(konsantre_debisi, birim_alan)
             st.metric("Gerekli Alan", f"{koyu_sonuc['required_area_m2']:,.0f} m2")
-            st.caption(f"Esdeger cap: {koyu_sonuc['equivalent_diameter_m']} m")
+            st.caption(f"Eşdeğer çap: {koyu_sonuc['equivalent_diameter_m']} m")
             st.caption(koyu_sonuc["note"])
 
             koyu_fiyat = st.number_input(
-                "Koyulastirici Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
+                "Koyulaştırıcı Fiyatı ($) - tedarikçi teklifinden", min_value=0.0, value=0.0, step=50000.0,
             )
         except ValueError as e:
             st.error(str(e))
@@ -418,8 +418,8 @@ with tab6:
     with sub2:
         st.subheader("Konsantre Filtresi")
         filtrasyon_hizi = st.number_input(
-            "Spesifik Filtrasyon Hizi (kg/m2/saat)", min_value=1.0, value=250.0, step=10.0,
-            help="Filtrasyon test sonucundan gelmeli - buradaki deger sadece ornek",
+            "Spesifik Filtrasyon Hızı (kg/m2/saat)", min_value=1.0, value=250.0, step=10.0,
+            help="Filtrasyon test sonucundan gelmeli - buradaki değer sadece örnek",
         )
         try:
             filtre_sonuc = filter_area(konsantre_debisi, filtrasyon_hizi)
@@ -427,7 +427,7 @@ with tab6:
             st.caption(filtre_sonuc["note"])
 
             filtre_fiyat = st.number_input(
-                "Filtre Fiyati ($) - tedarikci teklifinden", min_value=0.0, value=0.0, step=50000.0,
+                "Filtre Fiyatı ($) - tedarikçi teklifinden", min_value=0.0, value=0.0, step=50000.0,
             )
         except ValueError as e:
             st.error(str(e))
@@ -436,14 +436,14 @@ with tab6:
     toplam_yogunlastirma_capex = koyu_fiyat + filtre_fiyat
     if toplam_yogunlastirma_capex > 0:
         st.divider()
-        st.subheader("Yogunlastirma/Susuzlastirma Toplam CAPEX")
-        st.metric("Toplam (Koyulastirici + Filtre)", f"${toplam_yogunlastirma_capex:,.0f}")
+        st.subheader("Yoğunlaştırma/Susuzlaştırma Toplam CAPEX")
+        st.metric("Toplam (Koyulaştırıcı + Filtre)", f"${toplam_yogunlastirma_capex:,.0f}")
 
     st.divider()
     st.subheader("Referans: Altar Project Ekipman Listesi")
-    st.caption("Ekipman VARLIGI gercek/dogrulanmis - alan/kapasite verisi rapor tarafindan verilmiyor.")
+    st.caption("Ekipman VARLIĞI gerçek/doğrulanmış - alan/kapasite verisi rapor tarafından verilmiyor.")
     ref_df = pd.DataFrame([
-        {"Ekipman": eq.equipment_type, "Aciklama": eq.description, "Kaynak": eq.source}
+        {"Ekipman": eq.equipment_type, "Açıklama": eq.description, "Kaynak": eq.source}
         for eq in ALTAR_DEWATERING_REFERENCE
     ])
     st.dataframe(ref_df, use_container_width=True, hide_index=True)
