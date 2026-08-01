@@ -14,7 +14,11 @@ capex_scaling_model.py dosyalari bu dosyayla AYNI KLASORDE olmali.
 import streamlit as st
 import pandas as pd
 
-from grade_recovery_model import predict_recovery, MODELS as RECOVERY_MODELS
+from grade_recovery_model import (
+    predict_recovery,
+    MODELS as RECOVERY_MODELS,
+    DRILLDATA_MODELS as RECOVERY_DRILLDATA_MODELS,
+)
 from reagent_cost_model import (
     calculate_reagent_cost,
     UserReagentInput,
@@ -54,24 +58,45 @@ st.caption(
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
-        "Tenör - Kurtarma", "Reaktif Maliyeti", "CAPEX Ölçekleme",
+        "Tenör - Verim", "Reaktif Maliyeti", "CAPEX Ölçekleme",
         "Boyut Küçültme", "Flotasyon Hücresi", "Yoğunlaştırma/Susuzlaştırma",
     ]
 )
 
 # ------------------------------------------------------------------
-# TAB 1: Tenor - Kurtarma
+# TAB 1: Tenor - Verim
 # ------------------------------------------------------------------
 with tab1:
-    st.header("Tenör - Kurtarma Tahmini")
-    st.markdown("Kaynak: **Aranzazu Mine** NI 43-101 (2025), 2024 işletme verisi korelasyonu")
+    st.header("Tenör - Verim Tahmini")
+    st.markdown(
+        "Kaynak: **Aranzazu Mine** NI 43-101 (SLR, 28 Mart 2025), Bölüm 13.5 "
+        "(Recovery Projections for the Cash Flow Model), Tablo 13-18/13-19."
+    )
+
+    veri_seti = st.radio(
+        "Veri Seti",
+        options=["plant_data", "drill_data"],
+        format_func=lambda x: (
+            "Resmi Model (Plant Data — Eylül-Aralık 2024 işletme verisi, "
+            "nakit akışı modelinde kullanılan denklem)"
+            if x == "plant_data"
+            else "Variability Test (Drill Data — 210 karot örneği, GENİŞ aralık, DÜŞÜK R²)"
+        ),
+        help=(
+            "Plant Data: dar aralık ama yüksek güvenilirlik (gerçek işletme "
+            "koşulları). Drill Data: çok geniş aralık (farklı mineralojik "
+            "zonlar dahil) ama düşük R² (0.05-0.11) — sadece kaba eğilim, "
+            "kesin tahmin değil."
+        ),
+    )
 
     col1, col2 = st.columns([1, 2])
 
     with col1:
         metal = st.selectbox("Metal", options=list(RECOVERY_MODELS.keys()))
         birim = "%" if metal == "Cu" else "g/t"
-        model = RECOVERY_MODELS[metal]
+        models_dict = RECOVERY_MODELS if veri_seti == "plant_data" else RECOVERY_DRILLDATA_MODELS
+        model = models_dict[metal]
         varsayilan = (model.valid_grade_min + model.valid_grade_max) / 2
         tenor = st.number_input(
             f"Tenör ({birim})",
@@ -82,13 +107,25 @@ with tab1:
         )
 
     with col2:
-        sonuc = predict_recovery(metal, tenor)
-        st.metric("Tahmini Kurtarma", f"%{sonuc['predicted_recovery_pct']}")
-        if sonuc["extrapolating"]:
+        sonuc = predict_recovery(metal, tenor, dataset=veri_seti)
+        st.metric("Tahmini Verim", f"%{sonuc['predicted_recovery_pct']}")
+        if sonuc["r_squared"] is not None:
+            st.caption(f"Model R² = {sonuc['r_squared']}")
+        if sonuc["warning"]:
             st.warning(sonuc["warning"])
         else:
             st.success(f"Girilen tenör, test edilen aralık içinde ({model.valid_grade_min}-{model.valid_grade_max} {birim})")
         st.caption(f"Kaynak: {sonuc['source']}")
+
+    if veri_seti == "drill_data":
+        st.info(
+            "Bu veri seti (variability test, 210 karot örneği) yatağın FARKLI "
+            "mineralojik zonlarını (GH Pillar, BW, Mexicana South, AA) kapsar — "
+            "tenör tek başına verimi zayıf açıklar (R² 0.05-0.11), saha/"
+            "mineraloji değişkenliği çok daha baskındır. Değişken/benzer "
+            "olmayan yataklanma senaryoları için KABA bir referans olarak "
+            "kullanılabilir, ama Plant Data modelinin yerine geçmez."
+        )
 
 # ------------------------------------------------------------------
 # TAB 2: Reaktif Maliyeti
@@ -396,7 +433,7 @@ with tab6:
         st.subheader("Konsantre Koyulaştırıcı")
         konsantre_debisi = st.number_input(
             "Konsantre Katı Debisi (ton/saat)", min_value=0.1, value=145.0, step=1.0,
-            help="Kütle dengesinden hesaplanmalı: Besleme x Tenör x Kurtarma / Konsantre Tenörü",
+            help="Kütle dengesinden hesaplanmalı: Besleme x Tenör x Verim / Konsantre Tenörü",
         )
         birim_alan = st.number_input(
             "Birim Alan Yük Oranı (kg/m2/saat)", min_value=1.0, value=800.0, step=10.0,
