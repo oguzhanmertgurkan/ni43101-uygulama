@@ -45,6 +45,8 @@ from flotation_cell_sizing_model import (
     flotation_cell_volume,
     suggest_cell_count,
     ALTAR_RETENTION_TIMES,
+    ARANZAZU_BATCH_TEST_TIMES,
+    estimate_industrial_retention_time,
 )
 from dewatering_sizing_model import (
     thickener_area,
@@ -450,6 +452,49 @@ with tab5:
         ozgul_agirlik = st.number_input(
             "Cevher Özgül Ağırlığı (t/m3)", min_value=1.0, value=2.8, step=0.1,
             help="Tipik bakır porfiri örneği - kendi numunenin değerini kullan",
+        )
+
+    with st.expander("Referans/Araç: Batch test → tasarım retention time ölçek büyütme"):
+        st.caption(
+            "⚠️ Bu katsayılar Wills'in kitabından veya proje raporlarından "
+            "(Aranzazu/Altar/La Mina) DEĞİL, GENEL mineral işleme mühendisliği "
+            "literatüründen (Murphy & Heath 2011 AusIMM; çeşitli akademik "
+            "çalışmalar) derlendi. Kesin tasarım değeri değil, KABA bir "
+            "başlangıç tahmini sağlar — gerçek tasarım için pilot test/"
+            "detaylı mühendislik değerlendirmesi gerekir."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            batch_sure = st.number_input(
+                "Laboratuvar Batch Test Süresi (dk)", min_value=0.1, value=8.0, step=0.5,
+                help="Örn. Aranzazu rougher batch testi: 8 dk (4 aşama x 2 dk)",
+            )
+        with c2:
+            kategori = st.selectbox(
+                "Kategori",
+                options=["bakir_sulfur", "genel"],
+                format_func=lambda x: "Bakır Sülfür (2.1-2.6x)" if x == "bakir_sulfur" else "Genel/Tüm Cevherler (1.5-3.0x)",
+            )
+        tahmin = estimate_industrial_retention_time(batch_sure, category=kategori)
+        st.metric(
+            "Tahmini Tasarım Retention Time",
+            f"{tahmin['estimated_design_retention_time_min']} dk",
+            f"aralık: {tahmin['estimated_range_min']}-{tahmin['estimated_range_max']} dk",
+        )
+        st.caption(tahmin["note"])
+
+        st.markdown("**Aranzazu'nun gerçek batch test süreleri (Şekil 13-9/13-12) — karşılaştırma için:**")
+        batch_df = pd.DataFrame([
+            {"Aşama": s.stage, "Batch Test Süresi (dk)": s.retention_time_min, "Kaynak": s.source}
+            for s in ARANZAZU_BATCH_TEST_TIMES
+        ])
+        st.dataframe(batch_df, use_container_width=True, hide_index=True)
+        st.caption(
+            "Çapraz kontrol: Aranzazu rougher batch testi (8 dk) x 2.1-2.6 = "
+            "16.8-20.8 dk aralığı, Altar'ın GERÇEK tasarım değeriyle (23 dk) "
+            "makul bir büyüklük mertebesinde — farklı yataklar/tesisler olduğu "
+            "için birebir eşleşme beklenmez, ama metodoloji tutarlılığı için "
+            "iyi bir işaret."
         )
 
     st.divider()
