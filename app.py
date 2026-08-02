@@ -51,6 +51,13 @@ from dewatering_sizing_model import (
     filter_area,
     ALTAR_DEWATERING_REFERENCE,
 )
+from resource_summary_model import (
+    calculate_nsr,
+    check_nsr_against_cutoff,
+    ARANZAZU_RESOURCES_INCLUSIVE,
+    ARANZAZU_RESOURCES_EXCLUSIVE,
+    ARANZAZU_RESOURCE_SOURCE,
+)
 
 st.set_page_config(page_title="Flotasyon CAPEX/OPEX Aracı", layout="wide")
 
@@ -60,10 +67,11 @@ st.caption(
     "türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "Tenör - Verim", "Reaktif Maliyeti", "CAPEX Ölçekleme",
         "Boyut Küçültme", "Flotasyon Hücresi", "Yoğunlaştırma/Susuzlaştırma",
+        "Kaynak Özeti / NSR",
     ]
 )
 
@@ -562,3 +570,81 @@ with tab6:
         for eq in ALTAR_DEWATERING_REFERENCE
     ])
     st.dataframe(ref_df, use_container_width=True, hide_index=True)
+
+# ------------------------------------------------------------------
+# TAB 7: Kaynak Ozeti / NSR
+# ------------------------------------------------------------------
+with tab7:
+    st.header("Mineral Kaynak Özeti ve NSR (Net Smelter Return)")
+    st.markdown(
+        "Kaynak: **Aranzazu Mine** NI 43-101 (SLR, 28 Mart 2025), Bölüm 14 "
+        "(Mineral Resource Estimates), Tablo 14-1/14-2."
+    )
+
+    st.subheader("NSR Hesaplayıcı")
+    st.warning(
+        "⚠️ NSR katsayıları (74.553 / 47.932 / 0.431) SADECE bu raporun metal "
+        "fiyatı varsayımlarıyla (Au \\$2,000/oz, Cu \\$4.20/lb, Ag \\$25/oz) ve "
+        "kurtarma oranlarıyla (%91.3 Cu, %79.5 Au, %62.8 Ag) geçerlidir. "
+        "Farklı bir fiyat senaryosu için bu katsayılar GEÇERSİZDİR — yeniden "
+        "hesaplanmaları gerekir (bu smelter/refining kesinti oranları rapor "
+        "tarafından ayrıntılı verilmediği için burada yapılamıyor)."
+    )
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        nsr_cu = st.number_input("Cu Tenörü (%)", min_value=0.0, value=1.51, step=0.01, format="%.3f")
+        nsr_au = st.number_input("Au Tenörü (g/t)", min_value=0.0, value=0.76, step=0.01, format="%.3f")
+        nsr_ag = st.number_input("Ag Tenörü (g/t)", min_value=0.0, value=19.0, step=0.5, format="%.2f")
+
+    with col2:
+        nsr_sonuc = calculate_nsr(nsr_cu, nsr_au, nsr_ag)
+        st.metric("Hesaplanan NSR", f"${nsr_sonuc['nsr_usd_per_t']}/t")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Cu Katkısı", f"${nsr_sonuc['cu_contribution_usd_per_t']}/t")
+        c2.metric("Au Katkısı", f"${nsr_sonuc['au_contribution_usd_per_t']}/t")
+        c3.metric("Ag Katkısı", f"${nsr_sonuc['ag_contribution_usd_per_t']}/t")
+
+        kesim_sonuc = check_nsr_against_cutoff(nsr_sonuc["nsr_usd_per_t"])
+        if kesim_sonuc["above_cutoff"]:
+            st.success(kesim_sonuc["note"])
+        else:
+            st.warning(kesim_sonuc["note"])
+        st.caption(f"Formül: {nsr_sonuc['formula']}")
+        st.caption(f"Fiyat varsayımları: {nsr_sonuc['price_assumptions']}")
+
+    st.divider()
+    st.subheader("Aranzazu Mineral Kaynak Özeti (31 Aralık 2024)")
+    st.caption(ARANZAZU_RESOURCE_SOURCE)
+
+    kaynak_tipi = st.radio(
+        "Tablo Tipi",
+        options=["inclusive", "exclusive"],
+        format_func=lambda x: (
+            "Tablo 14-1 — Rezervleri DAHİL ederek (toplam jeolojik kaynak)"
+            if x == "inclusive"
+            else "Tablo 14-2 — Rezervleri HARİÇ tutarak (rezerv-üstü ek kaynak)"
+        ),
+        help=(
+            "Inclusive: mevcut Mineral Rezervleri de içeren toplam kaynak. "
+            "Exclusive: zaten Rezerv olarak sınıflandırılmış kısmı çıkarılmış, "
+            "geriye kalan ek kaynak. Inferred kategorisi ikisinde de aynıdır "
+            "(Inferred, Rezerve dönüştürülemez)."
+        ),
+    )
+
+    resources = ARANZAZU_RESOURCES_INCLUSIVE if kaynak_tipi == "inclusive" else ARANZAZU_RESOURCES_EXCLUSIVE
+    resource_df = pd.DataFrame([
+        {
+            "Kategori": r.category,
+            "Tonaj (bin t)": f"{r.tonnage_000t:,.0f}",
+            "Cu (%)": r.cu_pct,
+            "Au (g/t)": r.au_gpt,
+            "Ag (g/t)": r.ag_gpt,
+            "İçerik Cu (bin lb)": f"{r.cu_contained_000lb:,.0f}",
+            "İçerik Au (bin oz)": f"{r.au_contained_000oz:,.0f}",
+            "İçerik Ag (bin oz)": f"{r.ag_contained_000oz:,.0f}",
+        }
+        for r in resources
+    ])
+    st.dataframe(resource_df, use_container_width=True, hide_index=True)
