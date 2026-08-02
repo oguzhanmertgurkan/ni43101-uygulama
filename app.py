@@ -36,6 +36,8 @@ from comminution_sizing_model import (
     bond_grinding_power_kw,
     suggest_crushing_stages,
     ALTAR_EQUIPMENT_REFERENCE,
+    ARANZAZU_BOND_WI_REFERENCE,
+    check_work_index_against_reference,
 )
 from flotation_cell_sizing_model import (
     flotation_cell_volume,
@@ -286,6 +288,38 @@ with tab4:
             "Bond İş İndeksi - Wi (kWh/t)", min_value=0.1, value=14.0, step=0.1,
             help="Laboratuvar Bond testinden gelmeli - buradaki değer sadece örnek",
         )
+        kontrol = check_work_index_against_reference(wi, closing_screen="172um")
+        if kontrol["in_range"]:
+            st.caption(f"✅ {kontrol['note']}")
+        else:
+            st.caption(f"⚠️ {kontrol['note']}")
+        with st.expander("Referans: Aranzazu Mine ölçülmüş Bond Wi değerleri (Glory Hole zonu)"):
+            st.caption(
+                "Bu, GERÇEK ve ölçülmüş laboratuvar verisidir (Aranzazu NI 43-101, "
+                "SLR 2025, Tablo 13-14) — ama SADECE skarn tipi, kalkopirit ağırlıklı "
+                "bir cevhere (Glory Hole zonu) aittir. Kendi cevherin farklı "
+                "mineralojideyse (örn. porfiri) doğrudan kullanma; sadece benzer "
+                "skarn tipi cevherlerde görülebilecek TİPİK ARALIK için yönlendirme "
+                "amaçlı bak. Kesin tasarım için her zaman kendi numunenin lab "
+                "testi gerekir."
+            )
+            bond_wi_df = pd.DataFrame([
+                {
+                    "Numune/Zon": ref.sample,
+                    "Wi @172µm kapanış eleği (P80≈150µm) (kWh/t)": ref.bond_wi_172um_kwh_per_t,
+                    "Wi @125µm kapanış eleği (P80≈100µm) (kWh/t)": (
+                        ref.bond_wi_125um_kwh_per_t if ref.bond_wi_125um_kwh_per_t else "—"
+                    ),
+                }
+                for ref in ARANZAZU_BOND_WI_REFERENCE
+            ])
+            st.dataframe(bond_wi_df, use_container_width=True, hide_index=True)
+            st.caption(
+                "Not: daha ince öğütmede (125µm kapanış eleği / P80≈100µm) Wi "
+                "değerlerinin arttığı görülüyor — yani bu cevher daha ince "
+                "öğütüldükçe öğütülmesi zorlaşıyor (tipik bir davranış, ama "
+                "büyüklüğü cevhere özeldir)."
+            )
         f80 = st.number_input("Besleme F80 (mikron)", min_value=1.0, value=150000.0, step=1000.0)
         p80 = st.number_input("Ürün P80 (mikron)", min_value=1.0, value=190.0, step=10.0)
 
