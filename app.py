@@ -25,6 +25,8 @@ from reagent_cost_model import (
     COPPER_SULFIDE_FLOTATION_REAGENTS,
     ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T,
     ALTAR_TOTAL_PROCESSING_OPEX_SOURCE,
+    ARANZAZU_LOCKED_CYCLE_TEST_DOSAGES,
+    ARANZAZU_ARSENIC_DEPRESSANT_TRIALS,
 )
 from capex_scaling_model import (
     estimate_process_capex,
@@ -146,6 +148,48 @@ with tab2:
     )
 
     kapasite = st.number_input("Günlük İşleme Kapasitesi (ton/gün)", min_value=1000, value=60000, step=1000)
+
+    with st.expander("Referans: Aranzazu Mine Locked Cycle Test reaktif dozajları (Tablo 13-10)"):
+        st.caption(
+            "Bu, GERÇEK ve laboratuvarda FİİLEN KULLANILMIŞ reaktif dozajlarıdır "
+            "(Aranzazu NI 43-101, 2018 TR, Tablo 13-10) — raporun '%21 Cu, 14 g/t "
+            "Au, 216 g/t Ag konsantre, >%90 Cu kurtarma' başarı sonucunu ÜRETEN "
+            "reaktif şeması. TEST ÖLÇEĞİNDEDİR (5x2kg numune) — tam ölçekli tesis "
+            "tüketimi farklı olabilir. Ayrıca Aranzazu'nun reaktif suiti (Cytec "
+            "5100/3477) Altar'ın kullandığı PAX'tan FARKLI bir kimyasal seçimdir — "
+            "doğrudan karşılaştırılamaz, sadece BÜYÜKLÜK MERTEBESİ fikri verir."
+        )
+        dosage_df = pd.DataFrame([
+            {
+                "Reaktif": d.reagent_name,
+                "Rol": d.reagent_role,
+                "Dozaj (g/t)": d.dosage_g_per_t,
+                "Test Aşaması": d.test_stage,
+            }
+            for d in ARANZAZU_LOCKED_CYCLE_TEST_DOSAGES
+        ])
+        st.dataframe(dosage_df, use_container_width=True, hide_index=True)
+
+    with st.expander("Referans: Aranzazu arsenik depresan deneme sonuçları (Tablo 13-8)"):
+        st.caption(
+            "Cu-As (Cu/As oranı) selektiviteyi gösterir — yüksek değer daha iyi "
+            "arsenik reddi demektir. SADECE arsenik içeren bakır sülfür minerali "
+            "(enargit/tetraedrit) sorunu olan skarn/porfiri Cu yatakları için "
+            "anlamlıdır. Bazı satırlarda dozaj değeri kaynak tabloda okunaklı "
+            "değildi, bu açıkça belirtildi."
+        )
+        depressant_df = pd.DataFrame([
+            {
+                "Bileşik": t.compound,
+                "Dozaj (g/t)": t.dosage_g_per_t if t.dosage_g_per_t is not None else "belirsiz",
+                "Ekleme Noktası": t.addition_point,
+                "Cu Kurtarma (%)": t.cu_recovery_pct,
+                "Cu/As Oranı": t.cu_as_selectivity_ratio,
+                "Not": t.note,
+            }
+            for t in ARANZAZU_ARSENIC_DEPRESSANT_TRIALS
+        ])
+        st.dataframe(depressant_df, use_container_width=True, hide_index=True)
 
     st.subheader("Reaktif Verilerini Gir (kendi tedarikçi teklifinden)")
     user_inputs = []
