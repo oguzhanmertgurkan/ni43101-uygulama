@@ -68,18 +68,18 @@ def calculate_nsr(
         "au_contribution_usd_per_t": round(au_term, 2),
         "ag_contribution_usd_per_t": round(ag_term, 2),
         "nsr_usd_per_t": round(nsr_usd_per_t, 2),
-        "formula": "NSR ($/t) = 74.553 x Cu(%) + 47.932 x Au(g/t) + 0.431 x Ag(g/t)",
+        "formula": "NSR (\\$/t) = 74.553 x Cu(%) + 47.932 x Au(g/t) + 0.431 x Ag(g/t)",
         "price_assumptions": (
-            "Au $2,000/oz, Cu $4.20/lb, Ag $25/oz | Kurtarma: %91.3 Cu, "
+            "Au \\$2,000/oz, Cu \\$4.20/lb, Ag \\$25/oz | Verim: %91.3 Cu, "
             "%79.5 Au, %62.8 Ag | USD/MXN 1:20.5"
         ),
         "source": "Aranzazu NI 43-101 (SLR, 28 Mart 2025), Tablo 14-1, Not 7",
         "note": (
-            "Bu katsayilar SADECE bu rapordaki metal fiyati/kurtarma "
-            "varsayimlariyla gecerlidir - farkli bir fiyat senaryosu icin "
-            "YENIDEN HESAPLANMALIDIR (bu modul boyle bir yeniden hesaplama "
-            "araci SUNMAZ, cunku smelter/refining kesinti oranlari rapor "
-            "tarafindan ayrintili verilmemistir)."
+            "Bu katsayılar SADECE bu rapordaki metal fiyatı/verim "
+            "varsayımlarıyla geçerlidir - farklı bir fiyat senaryosu için "
+            "YENİDEN HESAPLANMALIDIR (bu modül böyle bir yeniden hesaplama "
+            "aracı SUNMAZ, çünkü smelter/rafine kesinti oranları rapor "
+            "tarafından ayrıntılı verilmemiştir)."
         ),
     }
 
@@ -101,11 +101,11 @@ def check_nsr_against_cutoff(
         "cutoff_usd_per_t": cutoff_usd_per_t,
         "above_cutoff": above_cutoff,
         "note": (
-            f"Hesaplanan NSR (${nsr_usd_per_t}/t), rapordaki Mineral Kaynak "
-            f"kesim degerinin (${cutoff_usd_per_t}/t) "
-            + ("USTUNDE - bu tenor rapor varsayimlarinda ekonomik sinirin icinde."
+            f"Hesaplanan NSR (\\${nsr_usd_per_t}/t), rapordaki Mineral Kaynak "
+            f"kesim değerinin (\\${cutoff_usd_per_t}/t) "
+            + ("ÜSTÜNDE - bu tenör rapor varsayımlarında ekonomik sınırın içinde."
                if above_cutoff else
-               "ALTINDA - bu tenor rapor varsayimlarinda ekonomik sinirin disinda kalabilir.")
+               "ALTINDA - bu tenör rapor varsayımlarında ekonomik sınırın dışında kalabilir.")
         ),
         "source": "Aranzazu NI 43-101 (SLR, 28 Mart 2025), Tablo 14-1, Not 5",
     }
@@ -143,9 +143,9 @@ ARANZAZU_RESOURCES_EXCLUSIVE = [
 
 ARANZAZU_RESOURCE_SOURCE = (
     "Aranzazu NI 43-101 (SLR, 28 Mart 2025), Tablo 14-1 (Inclusive) / "
-    "14-2 (Exclusive), 31 Aralik 2024 itibariyle. CIM (2014) tanimlarina "
-    "gore siniflandirilmis, NSR kesim degeri $45-50/t, min. 2.0m madencilik "
-    "genisligi varsayimlarina dayanir."
+    "14-2 (Exclusive), 31 Aralık 2024 itibariyle. CIM (2014) tanımlarına "
+    "göre sınıflandırılmış, NSR kesim değeri \\$45-50/t, min. 2.0m madencilik "
+    "genişliği varsayımlarına dayanır."
 )
 
 
