@@ -15,6 +15,8 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
+import leach_tab
+
 from grade_recovery_model import (
     predict_recovery,
     MODELS as RECOVERY_MODELS,
@@ -71,26 +73,71 @@ from resource_summary_model import (
     ARANZAZU_RESOURCE_SOURCE,
 )
 
-st.set_page_config(page_title="Flotasyon CAPEX/OPEX Araçı", layout="wide")
+st.set_page_config(page_title="Cevher Zenginleştirme CAPEX/OPEX Araçı", layout="wide")
 
-st.title("Flotasyon Tesisi CAPEX/OPEX Karar Destek Araçı")
+st.title("Cevher Zenginleştirme Tesisi CAPEX/OPEX Karar Destek Aracı")
 st.caption(
-    "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, La Mina) "
-    "türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
+    "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, Furnas, Cerro Blanco, Enchi, Cactus, "
+    "Santa Fe) türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
-    [
-        "Tenör - Verim", "Reaktif Maliyeti", "CAPEX Ölçekleme",
-        "Boyut Küçültme", "Flotasyon Hücresi", "Yoğunlaştırma/Susuzlaştırma",
-        "Kaynak Özeti / NSR",
-    ]
-)
+ROTALAR = {
+    "flotasyon": "Flotasyon",
+    "siyanur": "Siyanür liçi (CIL/CIP)",
+    "yigin_cu": "Yığın liçi (Cu, asit + SX-EW)",
+    "yigin_au": "Yığın liçi (Au, siyanür + ADR)",
+    "gravite": "Gravite / DMS / manyetik",
+}
+ROTA_NOTU = {
+    "flotasyon": "Flotasyon rotası: tenör-verim, reaktif, flotasyon hücresi ve CAPEX sekmeleri öne çıkar.",
+    "siyanur": "Siyanür liçi rotası: liç kinetiği ve CIL boyutlandırma öne çıkar; CAPEX alanları kırma, "
+               "öğütme, liç öncesi koyulaştırma, CIL, ADR ve reaktif olarak gelir.",
+    "yigin_cu": "Cu yığın liçi rotası: CAPEX alanları kırma, stok, yığın liçi, SX-EW ve reaktif olarak gelir. "
+                "Yığın boyutlandırma (pad alanı, sulama) henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
+    "yigin_au": "Au yığın liçi rotası: CAPEX alanları kırma, stok, yığın liçi, karbon adsorpsiyonu, ADR ve reaktif "
+                "olarak gelir. Yığın boyutlandırma henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
+    "gravite": "Gravite / DMS / manyetik rotası: bu rota için henüz rapor verisi ve ayrı hesap sekmesi yok. "
+               "CAPEX alanlarından kırma ve öğütme kullanılabilir.",
+}
+ROTA_ALANLARI = {
+    "flotasyon": ["kirma", "stok", "ogutme", "flotasyon", "konsantre_koyulastirma",
+                  "konsantre_filtrasyon", "atik_koyulastirma"],
+    "siyanur": ["kirma", "ogutme", "on_koyulastirma", "cil", "adr", "reaktif"],
+    "yigin_cu": ["kirma", "stok", "heap_leach", "sx_ew", "reaktif"],
+    "yigin_au": ["kirma", "stok", "heap_leach", "karbon_adsorpsiyon", "adr", "reaktif"],
+    "gravite": ["kirma", "ogutme", "gravite"],
+}
+rota = st.radio("Proses rotası", list(ROTALAR), format_func=ROTALAR.get, horizontal=True, key="rota",
+                help="Cevherine ve zenginleştirme yöntemine göre rotanı seç. Seçim sekme sırasını ve CAPEX "
+                     "alanlarının varsayılanlarını belirler.")
+st.caption(ROTA_NOTU[rota])
+
+TAB_ADLARI = {
+    "verim": "Tenör - Verim", "reaktif": "Reaktif Maliyeti", "capex": "CAPEX Ölçekleme",
+    "komin": "Boyut Küçültme", "flot": "Flotasyon Hücresi", "susuz": "Yoğunlaştırma/Susuzlaştırma",
+    "kaynak": "Kaynak Özeti / NSR", "lic": "Liç Kinetiği",
+}
+TAB_SIRASI = {
+    "flotasyon": ["verim", "reaktif", "capex", "komin", "flot", "susuz", "kaynak", "lic"],
+    "siyanur": ["lic", "komin", "reaktif", "susuz", "capex", "kaynak", "verim", "flot"],
+    "yigin_cu": ["capex", "komin", "lic", "reaktif", "kaynak", "verim", "susuz", "flot"],
+    "yigin_au": ["capex", "komin", "lic", "reaktif", "kaynak", "verim", "susuz", "flot"],
+    "gravite": ["capex", "komin", "susuz", "kaynak", "verim", "reaktif", "flot", "lic"],
+}
+_FLOT_ETIKETLI = {"verim", "reaktif", "flot"}
+
+
+def _tab_etiketi(kod):
+    ad = TAB_ADLARI[kod]
+    return ad + " (flot.)" if (rota != "flotasyon" and kod in _FLOT_ETIKETLI) else ad
+
+
+T = dict(zip(TAB_SIRASI[rota], st.tabs([_tab_etiketi(k) for k in TAB_SIRASI[rota]])))
 
 # ------------------------------------------------------------------
 # TAB 1: Tenör - Verim
 # ------------------------------------------------------------------
-with tab1:
+with T["verim"]:
     st.header("Tenör - Verim Tahmini")
     st.markdown(
         "Kaynak: **Aranzazu Mine** NI 43-101 (SLR, 28 Mart 2025), Bölüm 13.5 "
@@ -154,7 +201,7 @@ with tab1:
 # ------------------------------------------------------------------
 # TAB 2: Reaktif Maliyeti
 # ------------------------------------------------------------------
-with tab2:
+with T["reaktif"]:
     st.header("Reaktif Maliyeti")
     st.markdown(
         "Reaktif **türleri** Altar PEA'dan (Bölüm 17.1.3 / Şekil 17-2) doğrulanmış, "
@@ -266,7 +313,7 @@ with tab2:
 # ------------------------------------------------------------------
 # TAB 3: CAPEX Ölçekleme
 # ------------------------------------------------------------------
-with tab3:
+with T["capex"]:
     st.header("CAPEX Ölçekleme (Process Plant)")
     st.markdown(
         "**Process plant sınırı.** DAHİL: kırma, öğütme, flotasyon, koyulaştırma ve "
@@ -275,168 +322,174 @@ with tab3:
         "Gider payı ve sahip maliyetleri ayrı kalem olarak ele alınır."
     )
 
-    seviye = st.selectbox(
-        "Kapsam seviyesi",
-        options=list(KAPSAM_SEVIYELERI.keys()),
-        index=list(KAPSAM_SEVIYELERI.keys()).index(VARSAYILAN_SEVIYE),
-        format_func=lambda k: KAPSAM_SEVIYELERI[k],
-        help="Veri noktaları, raporların kalem kalem dökümünden bu seviyeye göre yeniden toplanır. "
-             "İşletme sermayesi hiçbir seviyeye dahil edilmez.",
+    ortak1, ortak2 = st.columns(2)
+    hedef_kapasite = ortak1.slider("Hedef Kapasite (ton/gün)", min_value=5000, max_value=150000,
+                                   value=30000, step=1000, key="capex_kapasite")
+    duzeltme = ortak2.number_input(
+        "Maliyet düzeltme çarpanı", min_value=0.1, max_value=5.0, value=1.0, step=0.01, key="capex_duzeltme",
+        help="Enflasyon, ekipman fiyat endeksi ve piyasa koşulları için SİZİN gireceğiniz çarpan. "
+             "Uygulama herhangi bir endeks varsaymaz (1.00 = düzeltme yok).",
     )
+    if rota != "flotasyon":
+        st.info("Bu rota için tesis toplamı tahmini yerine aşağıdaki alan bazlı tahmini kullan. "
+                "Tesis toplamı (Altar ve Furnas referanslı) yalnızca flotasyon tesisleri içindir.")
 
-    # --- Veri noktaları ve kapsam bayrakları ---
-    def _bayrak(v):
-        return "Belirsiz" if v is None else ("Evet" if v else "Hayır")
+    with st.expander("Tesis toplamı tahmini (flotasyon, Altar ve Furnas referanslı)", expanded=(rota == "flotasyon")):
+        seviye = st.selectbox(
+            "Kapsam seviyesi",
+            options=list(KAPSAM_SEVIYELERI.keys()),
+            index=list(KAPSAM_SEVIYELERI.keys()).index(VARSAYILAN_SEVIYE),
+            format_func=lambda k: KAPSAM_SEVIYELERI[k],
+            help="Veri noktaları, raporların kalem kalem dökümünden bu seviyeye göre yeniden toplanır. "
+                 "İşletme sermayesi hiçbir seviyeye dahil edilmez.",
+        )
 
-    satirlar = []
-    for p in ALL_DATA_POINTS:
-        k = p.kapsam
-        cs = p.capex_seviye(seviye)
-        satirlar.append({
-            "Proje": p.project,
-            "Proses": p.proses,
-            "Kapasite (tpd)": f"{p.capacity_tpd:,.0f}",
-            "Baz yılı": p.base_year,
-            "Başlık CAPEX": f"${p.basslik_capex_usd:,.0f}",
-            f"Seviye {seviye} CAPEX": "-" if cs is None else f"${cs:,.0f}",
-            "TSF dahil mi": _bayrak(k.tsf_dahil),
-            "Altyapı dahil mi": _bayrak(k.dis_altyapi_dahil),
-            "Gider payı dahil mi": _bayrak(k.gider_payi_dahil),
-            "Dolaylı maliyet dahil mi": _bayrak(k.dolayli_dahil),
-            "Durum": p.durum,
-        })
-    st.subheader("Veri noktaları ve kapsam bayrakları")
-    st.dataframe(pd.DataFrame(satirlar), hide_index=True, use_container_width=True)
-    st.caption(
-        "Kapsamı raporda net olmayan veya kalem dökümü bulunmayan noktalar "
-        "\"Belirsiz\" işaretlenir; üssel hesabına ve tahmine girmez, grafikte ayrı renkle gösterilir."
-    )
+        # --- Veri noktaları ve kapsam bayrakları ---
+        def _bayrak(v):
+            return "Belirsiz" if v is None else ("Evet" if v else "Hayır")
 
-    for p in ALL_DATA_POINTS:
-        if not p.kalemler:
-            continue
-        with st.expander(f"{p.project} - kalem kalem döküm ve notlar"):
-            kalem_df = pd.DataFrame([
-                {"Kalem": kl.ad, "Tutar (USD)": f"{kl.usd:,.0f}", "Kategori": kl.kategori}
-                for kl in p.kalemler
-            ])
-            st.dataframe(kalem_df, hide_index=True, use_container_width=True)
-            st.caption(p.source.replace("$", "\\$"))
-            st.caption(p.notlar.replace("$", "\\$"))
-            oran = kapsam_oranlari(p)
-            if oran:
-                st.caption(
-                    f"Bu rapordan öğrenilen oranlar: dolaylı maliyet = doğrudan+saha tesisleri tutarının "
-                    f"%{oran['dolayli_pct']:.1f}'i; gider payı = (doğrudan+saha+dolaylı) tutarının "
-                    f"%{oran['gider_payi_pct']:.1f}'i."
+        satirlar = []
+        for p in ALL_DATA_POINTS:
+            k = p.kapsam
+            cs = p.capex_seviye(seviye)
+            satirlar.append({
+                "Proje": p.project,
+                "Proses": p.proses,
+                "Kapasite (tpd)": f"{p.capacity_tpd:,.0f}",
+                "Baz yılı": p.base_year,
+                "Başlık CAPEX": f"${p.basslik_capex_usd:,.0f}",
+                f"Seviye {seviye} CAPEX": "-" if cs is None else f"${cs:,.0f}",
+                "TSF dahil mi": _bayrak(k.tsf_dahil),
+                "Altyapı dahil mi": _bayrak(k.dis_altyapi_dahil),
+                "Gider payı dahil mi": _bayrak(k.gider_payi_dahil),
+                "Dolaylı maliyet dahil mi": _bayrak(k.dolayli_dahil),
+                "Durum": p.durum,
+            })
+        st.subheader("Veri noktaları ve kapsam bayrakları")
+        st.dataframe(pd.DataFrame(satirlar), hide_index=True, use_container_width=True)
+        st.caption(
+            "Kapsamı raporda net olmayan veya kalem dökümü bulunmayan noktalar "
+            "\"Belirsiz\" işaretlenir; üssel hesabına ve tahmine girmez, grafikte ayrı renkle gösterilir."
+        )
+
+        for p in ALL_DATA_POINTS:
+            if not p.kalemler:
+                continue
+            with st.expander(f"{p.project} - kalem kalem döküm ve notlar"):
+                kalem_df = pd.DataFrame([
+                    {"Kalem": kl.ad, "Tutar (USD)": f"{kl.usd:,.0f}", "Kategori": kl.kategori}
+                    for kl in p.kalemler
+                ])
+                st.dataframe(kalem_df, hide_index=True, use_container_width=True)
+                st.caption(p.source.replace("$", "\\$"))
+                st.caption(p.notlar.replace("$", "\\$"))
+                oran = kapsam_oranlari(p)
+                if oran:
+                    st.caption(
+                        f"Bu rapordan öğrenilen oranlar: dolaylı maliyet = doğrudan+saha tesisleri tutarının "
+                        f"%{oran['dolayli_pct']:.1f}'i; gider payı = (doğrudan+saha+dolaylı) tutarının "
+                        f"%{oran['gider_payi_pct']:.1f}'i."
+                    )
+
+        # --- Kullanıcı girdileri ---
+        st.subheader("Tahmin")
+        ust_veri = fit_scaling_exponent(seviye=seviye)
+        c1, c2 = st.columns(2)
+        with c1:
+            if ust_veri is None:
+                n_girdi = st.number_input(
+                    "Ölçekleme üsteli (n)", min_value=0.3, max_value=1.0, value=LITERATUR_USTEL, step=0.01,
+                    help="Birden fazla doğrulanmış veri noktası olmadığından üstel veriden hesaplanamıyor. "
+                         "Varsayılan 0.6 genel literatür kuralıdır, bu projenin verisi değildir.",
                 )
-
-    # --- Kullanıcı girdileri ---
-    st.subheader("Tahmin")
-    ust_veri = fit_scaling_exponent(seviye=seviye)
-    c1, c2 = st.columns(2)
-    with c1:
-        hedef_kapasite = st.slider("Hedef Kapasite (ton/gün)", min_value=5000, max_value=150000,
-                                   value=30000, step=1000)
-        if ust_veri is None:
-            n_girdi = st.number_input(
-                "Ölçekleme üsteli (n)", min_value=0.3, max_value=1.0, value=LITERATUR_USTEL, step=0.01,
-                help="Birden fazla doğrulanmış veri noktası olmadığından üstel veriden hesaplanamıyor. "
-                     "Varsayılan 0.6 genel literatür kuralıdır, bu projenin verisi değildir.",
+                ham_n = fit_ham_ustel(seviye=seviye)
+                if ham_n is not None:
+                    st.warning(
+                        f"Doğrulanmış noktalardan hesaplanan üstel {ham_n:.2f}, fiziksel aralığın "
+                        f"({USTEL_ARALIGI[0]}-{USTEL_ARALIGI[1]}) dışında olduğu için kullanılmadı: noktalar "
+                        f"kapsam, bölge veya çalışma sınıfı farkı yüzünden birbiriyle tutarlı değil."
+                    )
+            else:
+                n_girdi = None
+                st.info(f"Doğrulanmış noktalardan hesaplanan üstel: **n = {ust_veri:.4f}**")
+        with c2:
+            gider_pct = st.number_input(
+                "Ek gider payı (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0,
+                disabled=(seviye == "D"),
+                help="Seviye D raporun kendi gider payını zaten içerir.",
             )
-            ham_n = fit_ham_ustel(seviye=seviye)
-            if ham_n is not None:
-                st.warning(
-                    f"Doğrulanmış noktalardan hesaplanan üstel {ham_n:.2f}, fiziksel aralığın "
-                    f"({USTEL_ARALIGI[0]}-{USTEL_ARALIGI[1]}) dışında olduğu için kullanılmadı: noktalar "
-                    f"kapsam, bölge veya çalışma sınıfı farkı yüzünden birbiriyle tutarlı değil."
-                )
-        else:
-            n_girdi = None
-            st.info(f"Doğrulanmış noktalardan hesaplanan üstel: **n = {ust_veri:.4f}**")
-    with c2:
-        duzeltme = st.number_input(
-            "Maliyet düzeltme çarpanı", min_value=0.1, max_value=5.0, value=1.0, step=0.01,
-            help="Enflasyon, ekipman fiyat endeksi ve piyasa koşulları için SİZİN gireceğiniz çarpan. "
-                 "Uygulama herhangi bir endeks varsaymaz (1.00 = düzeltme yok).",
+            sahip = st.number_input("Sahip maliyetleri (USD)", min_value=0.0, value=0.0, step=1_000_000.0)
+
+        sonuc = estimate_process_capex(
+            target_capacity_tpd=hedef_kapasite,
+            seviye=seviye,
+            exponent=n_girdi,
+            duzeltme_carpani=duzeltme,
+            gider_payi_pct=0.0 if seviye == "D" else gider_pct,
+            sahip_maliyeti_usd=sahip,
         )
-        gider_pct = st.number_input(
-            "Ek gider payı (%)", min_value=0.0, max_value=100.0, value=0.0, step=1.0,
-            disabled=(seviye == "D"),
-            help="Seviye D raporun kendi gider payını zaten içerir.",
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Tahmini Process Plant CAPEX", f"${sonuc['estimated_process_capex_usd']:,.0f}")
+        m2.metric("Ölçeklenmiş (düzeltme öncesi)", f"${sonuc['scaled_capex_usd']:,.0f}")
+        m3.metric("Kullanılan Referans", sonuc["reference_project"])
+
+        if sonuc["warning"]:
+            st.warning(sonuc["warning"].replace("$", "\\$"))
+        st.caption(sonuc["note"].replace("$", "\\$"))
+        if len(sonuc["referans_tahminleri"]) > 1:
+            st.markdown("**Doğrulanmış referanslardan ayrı ayrı tahmin** (aynı n ve düzeltme çarpanıyla)")
+            st.dataframe(pd.DataFrame([
+                {"Referans": t["project"], "Referans kapasite (tpd)": f"{t['capacity_tpd']:,.0f}",
+                 "Baz yılı": t["base_year"], f"Referans CAPEX (seviye {seviye})": f"${t['reference_capex_usd']:,.0f}",
+                 "Hedef için tahmin": f"${t['scaled_capex_usd']:,.0f}"}
+                for t in sonuc["referans_tahminleri"]
+            ]), hide_index=True, use_container_width=True)
+
+        # --- Grafik: ölçekleme eğrisi + veri noktaları (kapsam durumuna göre renk) ---
+        kapasiteler = list(range(5000, 150001, 5000))
+        egri = pd.DataFrame({
+            "Kapasite (tpd)": kapasiteler,
+            "CAPEX (USD)": [
+                estimate_process_capex(
+                    k, seviye=seviye, exponent=n_girdi, duzeltme_carpani=duzeltme,
+                    gider_payi_pct=0.0 if seviye == "D" else gider_pct, sahip_maliyeti_usd=sahip,
+                )["estimated_process_capex_usd"]
+                for k in kapasiteler
+            ],
+        })
+        nokta_rows = []
+        for p in ALL_DATA_POINTS:
+            cs = p.capex_seviye(seviye)
+            if cs is not None:
+                nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
+                                   "CAPEX (USD)": cs * duzeltme,
+                                   "Durum": f"Doğrulanmış (seviye {seviye})"})
+            elif not p.kapsam_dogrulandi and not p.alanlar:
+                nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
+                                   "CAPEX (USD)": p.basslik_capex_usd,
+                                   "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
+            # kapsamı doğrulanmış ama bu seviyede hesaplanamayan nokta grafiğe konmaz
+        # Altar başlık rakamı da kalem dökümüyle uyuşmadığı için ayrı gösterilir
+        nokta_rows.append({"Proje": "Altar (başlık rakamı)", "Kapasite (tpd)": ALTAR_DATA_POINT.capacity_tpd,
+                           "CAPEX (USD)": ALTAR_DATA_POINT.basslik_capex_usd,
+                           "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
+        nokta_df = pd.DataFrame(nokta_rows)
+        dogr_etiket = f"Doğrulanmış (seviye {seviye})"
+        renk = alt.Scale(domain=[dogr_etiket, "Kapsamı belirsiz (hesaba katılmaz)"],
+                         range=["#1f77b4", "#d62728"])
+        cizgi = alt.Chart(egri).mark_line(color="#888888").encode(
+            x=alt.X("Kapasite (tpd):Q"), y=alt.Y("CAPEX (USD):Q", title="CAPEX (USD)"))
+        noktalar = alt.Chart(nokta_df).mark_point(size=120, filled=True).encode(
+            x="Kapasite (tpd):Q", y="CAPEX (USD):Q",
+            color=alt.Color("Durum:N", scale=renk, title="Veri noktası durumu"),
+            tooltip=["Proje", "Kapasite (tpd)", "CAPEX (USD)", "Durum"])
+        st.altair_chart(cizgi + noktalar, use_container_width=True)
+
+        st.caption(
+            "Not: Veri noktaları farklı baz yıllarına ve farklı kapsamlara aittir. Çarpan, kullanıcı "
+            "girdisidir. PEA tahminlerinin doğruluk sınıfı genellikle ±%50'dir."
         )
-        sahip = st.number_input("Sahip maliyetleri (USD)", min_value=0.0, value=0.0, step=1_000_000.0)
-
-    sonuc = estimate_process_capex(
-        target_capacity_tpd=hedef_kapasite,
-        seviye=seviye,
-        exponent=n_girdi,
-        duzeltme_carpani=duzeltme,
-        gider_payi_pct=0.0 if seviye == "D" else gider_pct,
-        sahip_maliyeti_usd=sahip,
-    )
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Tahmini Process Plant CAPEX", f"${sonuc['estimated_process_capex_usd']:,.0f}")
-    m2.metric("Ölçeklenmiş (düzeltme öncesi)", f"${sonuc['scaled_capex_usd']:,.0f}")
-    m3.metric("Kullanılan Referans", sonuc["reference_project"])
-
-    if sonuc["warning"]:
-        st.warning(sonuc["warning"].replace("$", "\\$"))
-    st.caption(sonuc["note"].replace("$", "\\$"))
-    if len(sonuc["referans_tahminleri"]) > 1:
-        st.markdown("**Doğrulanmış referanslardan ayrı ayrı tahmin** (aynı n ve düzeltme çarpanıyla)")
-        st.dataframe(pd.DataFrame([
-            {"Referans": t["project"], "Referans kapasite (tpd)": f"{t['capacity_tpd']:,.0f}",
-             "Baz yılı": t["base_year"], f"Referans CAPEX (seviye {seviye})": f"${t['reference_capex_usd']:,.0f}",
-             "Hedef için tahmin": f"${t['scaled_capex_usd']:,.0f}"}
-            for t in sonuc["referans_tahminleri"]
-        ]), hide_index=True, use_container_width=True)
-
-    # --- Grafik: ölçekleme eğrisi + veri noktaları (kapsam durumuna göre renk) ---
-    kapasiteler = list(range(5000, 150001, 5000))
-    egri = pd.DataFrame({
-        "Kapasite (tpd)": kapasiteler,
-        "CAPEX (USD)": [
-            estimate_process_capex(
-                k, seviye=seviye, exponent=n_girdi, duzeltme_carpani=duzeltme,
-                gider_payi_pct=0.0 if seviye == "D" else gider_pct, sahip_maliyeti_usd=sahip,
-            )["estimated_process_capex_usd"]
-            for k in kapasiteler
-        ],
-    })
-    nokta_rows = []
-    for p in ALL_DATA_POINTS:
-        cs = p.capex_seviye(seviye)
-        if cs is not None:
-            nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
-                               "CAPEX (USD)": cs * duzeltme,
-                               "Durum": f"Doğrulanmış (seviye {seviye})"})
-        elif not p.kapsam_dogrulandi and not p.alanlar:
-            nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
-                               "CAPEX (USD)": p.basslik_capex_usd,
-                               "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
-        # kapsamı doğrulanmış ama bu seviyede hesaplanamayan nokta grafiğe konmaz
-    # Altar başlık rakamı da kalem dökümüyle uyuşmadığı için ayrı gösterilir
-    nokta_rows.append({"Proje": "Altar (başlık rakamı)", "Kapasite (tpd)": ALTAR_DATA_POINT.capacity_tpd,
-                       "CAPEX (USD)": ALTAR_DATA_POINT.basslik_capex_usd,
-                       "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
-    nokta_df = pd.DataFrame(nokta_rows)
-    dogr_etiket = f"Doğrulanmış (seviye {seviye})"
-    renk = alt.Scale(domain=[dogr_etiket, "Kapsamı belirsiz (hesaba katılmaz)"],
-                     range=["#1f77b4", "#d62728"])
-    cizgi = alt.Chart(egri).mark_line(color="#888888").encode(
-        x=alt.X("Kapasite (tpd):Q"), y=alt.Y("CAPEX (USD):Q", title="CAPEX (USD)"))
-    noktalar = alt.Chart(nokta_df).mark_point(size=120, filled=True).encode(
-        x="Kapasite (tpd):Q", y="CAPEX (USD):Q",
-        color=alt.Color("Durum:N", scale=renk, title="Veri noktası durumu"),
-        tooltip=["Proje", "Kapasite (tpd)", "CAPEX (USD)", "Durum"])
-    st.altair_chart(cizgi + noktalar, use_container_width=True)
-
-    st.caption(
-        "Not: Veri noktaları farklı baz yıllarına ve farklı kapsamlara aittir. Çarpan, kullanıcı "
-        "girdisidir. PEA tahminlerinin doğruluk sınıfı genellikle ±%50'dir."
-    )
 
     # ------------------------------------------------------------------
     # Alan (unit operation) bazlı tahmin: kullanıcı rotasını seçer
@@ -450,11 +503,9 @@ with tab3:
         "Henüz rapor verisi olmayan alanlar 'veri yok' olarak görünür."
     )
     secenekler = list(ALAN_TURLERI.keys())
-    varsayilan_alanlar = ["kirma", "stok", "ogutme", "flotasyon", "konsantre_koyulastirma",
-                          "konsantre_filtrasyon", "atik_koyulastirma"]
     secilen = st.multiselect(
-        "Rotanda bulunan alanlar", options=secenekler, default=varsayilan_alanlar,
-        format_func=lambda k: ALAN_TURLERI[k],
+        "Rotanda bulunan alanlar", options=secenekler, default=ROTA_ALANLARI[rota],
+        format_func=lambda k: ALAN_TURLERI[k], key=f"alanlar_{rota}",
     )
     a1, a2, a3 = st.columns(3)
     alan_n = a1.number_input("Alan ölçekleme üsteli (n)", min_value=0.3, max_value=1.0,
@@ -537,7 +588,7 @@ with tab3:
 # ------------------------------------------------------------------
 # TAB 4: Boyut Küçültme (Kırma + Öğütme)
 # ------------------------------------------------------------------
-with tab4:
+with T["komin"]:
     st.header("Boyut Küçültme (Kırma + Öğütme) Boyutlandırma")
     st.markdown(
         "Bond denklemi (1952) - evrensel mühendislik formülü - ve genel "
@@ -672,7 +723,7 @@ with tab4:
 # ------------------------------------------------------------------
 # TAB 5: Flotasyon Hücresi Boyutlandırma
 # ------------------------------------------------------------------
-with tab5:
+with T["flot"]:
     st.header("Flotasyon Hücresi Boyutlandırma")
     st.markdown(
         "**Gerekli Hacim (m3)** kolonu OTOMATİK hesaplanır (besleme, pulp "
@@ -795,7 +846,7 @@ with tab5:
 # ------------------------------------------------------------------
 # TAB 6: Yoğunlaştırma / Susuzlaştırma
 # ------------------------------------------------------------------
-with tab6:
+with T["susuz"]:
     st.header("Yoğunlaştırma / Susuzlaştırma Boyutlandırma")
     st.markdown(
         "Konsantre koyulaştırıcı ve filtre için standart alan hesabı. "
@@ -865,7 +916,7 @@ with tab6:
 # ------------------------------------------------------------------
 # TAB 7: Kaynak Özeti / NSR
 # ------------------------------------------------------------------
-with tab7:
+with T["kaynak"]:
     st.header("Mineral Kaynak Özeti ve NSR (Net Smelter Return)")
     st.markdown(
         "Kaynak: **Aranzazu Mine** NI 43-101 (SLR, 28 Mart 2025), Bölüm 14 "
@@ -939,3 +990,10 @@ with tab7:
         for r in resources
     ])
     st.dataframe(resource_df, use_container_width=True, hide_index=True)
+
+
+# ------------------------------------------------------------------
+# TAB: Liç Kinetiği
+# ------------------------------------------------------------------
+with T["lic"]:
+    leach_tab.render(rota)
