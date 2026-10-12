@@ -1,14 +1,14 @@
 """
-Flotasyon Tesisi CAPEX/OPEX Karar Destek Araci - Test Arayuzu
+Flotasyon Tesisi CAPEX/OPEX Karar Destek Aracı - Test Arayüzü
 ================================================================
-Calistirmak icin (terminalde, bu dosyanin bulundugu klasorde):
+Çalıştırmak için (terminalde, bu dosyanın bulunduğu klasörde):
 
     streamlit run app.py
 
-Tarayicida otomatik acilir (genelde http://localhost:8501)
+Tarayıcıda otomatik açılır (genelde http://localhost:8501)
 
 Gereksinim: grade_recovery_model.py, reagent_cost_model.py ve
-capex_scaling_model.py dosyalari bu dosyayla AYNI KLASORDE olmali.
+capex_scaling_model.py dosyaları bu dosyayla AYNI KLASÖRDE olmalı.
 """
 
 import streamlit as st
@@ -61,9 +61,9 @@ from resource_summary_model import (
     ARANZAZU_RESOURCE_SOURCE,
 )
 
-st.set_page_config(page_title="Flotasyon CAPEX/OPEX Aracı", layout="wide")
+st.set_page_config(page_title="Flotasyon CAPEX/OPEX Araçı", layout="wide")
 
-st.title("Flotasyon Tesisi CAPEX/OPEX Karar Destek Aracı")
+st.title("Flotasyon Tesisi CAPEX/OPEX Karar Destek Araçı")
 st.caption(
     "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, La Mina) "
     "türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
@@ -78,7 +78,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
 )
 
 # ------------------------------------------------------------------
-# TAB 1: Tenor - Verim
+# TAB 1: Tenör - Verim
 # ------------------------------------------------------------------
 with tab1:
     st.header("Tenör - Verim Tahmini")
@@ -154,7 +154,7 @@ with tab2:
     st.info(
         "Bu tasarım bilinçli: gerçek dünyada her şirket kendi tedarikçisinden "
         "farklı fiyat/tüketim verisi alacak. Uygulama sana hangi reaktif "
-        "türlerine ihtiyacın olduğunu söyler, maliyeti SENİN girdiğin sayılarla hesaplar."
+        "türlerine ihtiyaçın olduğunu söyler, maliyeti SENİN girdiğin sayılarla hesaplar."
     )
 
     kapasite = st.number_input("Günlük İşleme Kapasitesi (ton/gün)", min_value=1000, value=60000, step=1000)
@@ -163,7 +163,7 @@ with tab2:
         st.caption(
             "Bu, GERÇEK ve laboratuvarda FİİLEN KULLANILMIŞ reaktif dozajlarıdır "
             "(Aranzazu NI 43-101, 2018 TR, Tablo 13-10) — raporun '%21 Cu, 14 g/t "
-            "Au, 216 g/t Ag konsantre, >%90 Cu kurtarma' başarı sonucunu ÜRETEN "
+            "Au, 216 g/t Ag konsantre, >%90 Cu verim' başarı sonucunu ÜRETEN "
             "reaktif şeması. TEST ÖLÇEĞİNDEDİR (5x2kg numune) — tam ölçekli tesis "
             "tüketimi farklı olabilir. Ayrıca Aranzazu'nun reaktif suiti (Cytec "
             "5100/3477) Altar'ın kullandığı PAX'tan FARKLI bir kimyasal seçimdir — "
@@ -193,7 +193,7 @@ with tab2:
                 "Bileşik": t.compound,
                 "Dozaj (g/t)": t.dosage_g_per_t if t.dosage_g_per_t is not None else "belirsiz",
                 "Ekleme Noktası": t.addition_point,
-                "Cu Kurtarma (%)": t.cu_recovery_pct,
+                "Cu Verim (%)": t.cu_recovery_pct,
                 "Cu/As Oranı": t.cu_as_selectivity_ratio,
                 "Not": t.note,
             }
@@ -254,7 +254,7 @@ with tab2:
         )
 
 # ------------------------------------------------------------------
-# TAB 3: CAPEX Olcekleme
+# TAB 3: CAPEX Ölçekleme
 # ------------------------------------------------------------------
 with tab3:
     st.header("CAPEX Ölçekleme (Process Plant)")
@@ -276,7 +276,7 @@ with tab3:
 
     st.caption(sonuc["note"])
 
-    # Olcekleme egrisini gorsellestir
+    # Ölçekleme eğrisini görselleştir
     kapasiteler = list(range(5000, 150001, 5000))
     tahminler = [estimate_process_capex(k)["estimated_process_capex_usd"] for k in kapasiteler]
     egri_df = pd.DataFrame({"Kapasite (tpd)": kapasiteler, "Tahmini CAPEX ($)": tahminler}).set_index("Kapasite (tpd)")
@@ -289,14 +289,14 @@ with tab3:
     )
 
 # ------------------------------------------------------------------
-# TAB 4: Boyut Kucultme (Kirma + Ogutme)
+# TAB 4: Boyut Küçültme (Kırma + Öğütme)
 # ------------------------------------------------------------------
 with tab4:
     st.header("Boyut Küçültme (Kırma + Öğütme) Boyutlandırma")
     st.markdown(
         "Bond denklemi (1952) - evrensel mühendislik formülü - ve genel "
         "endüstri kurallarıyla teknik boyutlandırma. Ekipman marka/model "
-        "seçimi kapsam dışında; bu sadece TEKNİK ihtiyacı hesaplar."
+        "seçimi kapsam dışında; bu sadece TEKNİK ihtiyaçı hesaplar."
     )
 
     sub1, sub2 = st.columns(2)
@@ -424,7 +424,7 @@ with tab4:
     st.dataframe(ref_df, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------
-# TAB 5: Flotasyon Hucresi Boyutlandirma
+# TAB 5: Flotasyon Hücresi Boyutlandırma
 # ------------------------------------------------------------------
 with tab5:
     st.header("Flotasyon Hücresi Boyutlandırma")
@@ -547,7 +547,7 @@ with tab5:
             st.metric("Flotasyon Hücreleri Toplam CAPEX", f"${toplam_flotasyon_capex:,.0f}")
 
 # ------------------------------------------------------------------
-# TAB 6: Yogunlastirma / Susuzlastirma
+# TAB 6: Yoğunlaştırma / Susuzlaştırma
 # ------------------------------------------------------------------
 with tab6:
     st.header("Yoğunlaştırma / Susuzlaştırma Boyutlandırma")
@@ -562,8 +562,8 @@ with tab6:
 
     with sub1:
         st.subheader("Konsantre Koyulaştırıcı")
-        konsantre_debisi = st.number_input(
-            "Konsantre Katı Debisi (ton/saat)", min_value=0.1, value=145.0, step=1.0,
+        konsantre_besleme = st.number_input(
+            "Konsantre Katı Besleme Miktarı (ton/saat)", min_value=0.1, value=145.0, step=1.0,
             help="Kütle dengesinden hesaplanmalı: Besleme x Tenör x Verim / Konsantre Tenörü",
         )
         birim_alan = st.number_input(
@@ -571,7 +571,7 @@ with tab6:
             help="Çökelme (settling) test sonucundan gelmeli - buradaki değer sadece örnek",
         )
         try:
-            koyu_sonuc = thickener_area(konsantre_debisi, birim_alan)
+            koyu_sonuc = thickener_area(konsantre_besleme, birim_alan)
             st.metric("Gerekli Alan", f"{koyu_sonuc['required_area_m2']:,.0f} m2")
             st.caption(f"Eşdeğer çap: {koyu_sonuc['equivalent_diameter_m']} m")
             st.caption(koyu_sonuc["note"])
@@ -590,7 +590,7 @@ with tab6:
             help="Filtrasyon test sonucundan gelmeli - buradaki değer sadece örnek",
         )
         try:
-            filtre_sonuc = filter_area(konsantre_debisi, filtrasyon_hizi)
+            filtre_sonuc = filter_area(konsantre_besleme, filtrasyon_hizi)
             st.metric("Gerekli Alan", f"{filtre_sonuc['required_area_m2']:,.0f} m2")
             st.caption(filtre_sonuc["note"])
 
@@ -617,7 +617,7 @@ with tab6:
     st.dataframe(ref_df, use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------
-# TAB 7: Kaynak Ozeti / NSR
+# TAB 7: Kaynak Özeti / NSR
 # ------------------------------------------------------------------
 with tab7:
     st.header("Mineral Kaynak Özeti ve NSR (Net Smelter Return)")
@@ -630,7 +630,7 @@ with tab7:
     st.warning(
         "⚠️ NSR katsayıları (74.553 / 47.932 / 0.431) SADECE bu raporun metal "
         "fiyatı varsayımlarıyla (Au \\$2,000/oz, Cu \\$4.20/lb, Ag \\$25/oz) ve "
-        "kurtarma oranlarıyla (%91.3 Cu, %79.5 Au, %62.8 Ag) geçerlidir. "
+        "verim oranlarıyla (%91.3 Cu, %79.5 Au, %62.8 Ag) geçerlidir. "
         "Farklı bir fiyat senaryosu için bu katsayılar GEÇERSİZDİR — yeniden "
         "hesaplanmaları gerekir (bu smelter/refining kesinti oranları rapor "
         "tarafından ayrıntılı verilmediği için burada yapılamıyor)."

@@ -1,41 +1,41 @@
 """
-Reaktif Maliyeti Hesaplama Cercevesi (Framework)
+Reaktif Maliyeti Hesaplama Çerçevesi (Framework)
 ===================================================
 
-DUZELTME NOTU: Bu dosyanin ilk versiyonunda, Altar Project raporundan geldigi
-iddia edilen reaktif bazinda kg/ton tuketim ve birim fiyat degerleri
-YANLISLIKLA UYDURULMUSTU. NI 43-101 PEA raporlari genelde bu kirilimi kamuya
-acmaz (sadece toplu $/ton rakami verirler). Bu versiyon o hatayi duzeltir:
-artik hicbir sayi uydurulmuyor.
+DÜZELTME NOTU: Bu dosyanın ilk versiyonunda, Altar Project raporundan geldiği
+iddia edilen reaktif bazında kg/ton tüketim ve birim fiyat değerleri
+YANLIŞLIKLA UYDURULMUŞTU. NI 43-101 PEA raporları genelde bu kırılımı kamuya
+açmaz (sadece toplu $/ton rakamı verirler). Bu versiyon o hatayı düzeltir:
+artık hiçbir sayı uydurulmuyor.
 
-GERCEK, RAPORDAN DOGRULANMIS VERI:
-- Reaktif TURLERI (Altar PEA, Bolum 17.1.3 / Sekil 17-2):
-    PAX (toplayici), Kirec (pH duzenleyici/pirit bastirici, hedef pH 10.5-11),
-    MIBC (kopurtucu), Flokulant (koyulastirma)
-- Tesis toplam isleme birim maliyeti - reaktif+asinma+enerji HEPSI DAHIL,
+GERÇEK, RAPORDAN DOĞRULANMIŞ VERİ:
+- Reaktif TÜRLERİ (Altar PEA, Bölüm 17.1.3 / Şekil 17-2):
+    PAX (toplayıcı), Kireç (pH düzenleyici/pirit bastırıcı, hedef pH 10.5-11),
+    MIBC (köpürtücü), Flokulant (koyulaştırma)
+- Tesis toplam işleme birim maliyeti - reaktif+aşınma+enerji HEPSİ DAHİL,
   KIRILIMSIZ: $6.93 / ton cevher (Altar PEA, Tablo 21-2 / 1-4, 2025)
-- Aranzazu Mine LOCKED CYCLE TEST reaktif dozajlari (Aranzazu NI 43-101,
-  2018 TR, Tablo 13-10) - GERCEK, TEST OLCEGINDE FIILEN KULLANILMIS g/ton
+- Aranzazu Mine LOCKED CYCLE TEST reaktif dozajları (Aranzazu NI 43-101,
+  2018 TR, Tablo 13-10) - GERÇEK, TEST ÖLÇEĞİNDE FİİLEN KULLANILMIŞ g/ton
   dozajlar. Bu test, raporun "%21 Cu, 14 g/t Au, 216 g/t Ag konsantre,
-  >%90 Cu kurtarma" basari sonucunu URETEN reaktif semasidir.
-- Aranzazu arsenik depresan deneme sonuclari (Tablo 13-8) - farkli
-  depresan secenekleri (peroksit, NaS2, Na2ClO3, DETA/SO2) ve bunlarin
+  >%90 Cu verim" başarı sonucunu ÜRETEN reaktif şemasıdır.
+- Aranzazu arsenik depresan deneme sonuçları (Tablo 13-8) - farklı
+  depresan seçenekleri (peroksit, NaS2, Na2ClO3, DETA/SO2) ve bunların
   Cu/As selektivitesine etkisi.
 
-ONEMLI SINIRLAMA: Yukaridaki Aranzazu verileri TEST OLCEGINDEDIR (2kg
-laboratuvar numunesi) - tam olcekli tesis tuketimi FARKLI olabilir
-(devir/resirkulasyon, reaktif bozunmasi, verimlilik farklari nedeniyle).
-Ayrica Aranzazu'nun reaktif SUITI (Cytec 5100/3477 - thionocarbamate/
-dithiophosphate) Altar'in kullandigi PAX'tan (ksantat ailesi) FARKLI bir
-kimyasal secimdir - dogrudan karsilastirilamaz, sadece "ayni kategori
-icin makul BUYUKLUK MERTEBESI" fikri vermek amaciyla referans olarak
+ÖNEMLİ SINIRLAMA: Yukarıdaki Aranzazu verileri TEST ÖLÇEĞİNDEDİR (2kg
+laboratuvar numunesi) - tam ölçekli tesis tüketimi FARKLI olabilir
+(devir/resirkülasyon, reaktif bozunması, verimlilik farkları nedeniyle).
+Ayrıca Aranzazu'nun reaktif SUITI (Cytec 5100/3477 - thionocarbamate/
+dithiophosphate) Altar'ın kullandığı PAX'tan (ksantat ailesi) FARKLI bir
+kimyasal seçimdir - doğrudan karşılaştırılamaz, sadece "aynı kategori
+için makul BÜYÜKLÜK MERTEBESI" fikri vermek amacıyla referans olarak
 sunulur.
 
-Mimari mantik: 3. sahis kullanicilar (sirketler) uygulamaya girdiginde,
-KENDI tedarikci tekliflerini (kg/ton tuketim + $/kg fiyat) kendileri
-girecek. Bu modulun gorevi hangi reaktif TURLERINE ihtiyac oldugunu dogru
-onermek ve kullanicinin girdigi gercek sayilardan maliyeti hesaplamak -
-varsayilan sayi uydurmak degil.
+Mimari mantık: 3. şahıs kullanıcılar (şirketler) uygulamaya girdiğinde,
+KENDİ tedarikçi tekliflerini (kg/ton tüketim + $/kg fiyat) kendileri
+girecek. Bu modülün görevi hangi reaktif TÜRLERİNE ihtiyaç olduğunu doğru
+önermek ve kullanıcının girdiği gerçek sayılardan maliyeti hesaplamak -
+varsayılan sayı uydurmak değil.
 """
 
 from dataclasses import dataclass
@@ -44,47 +44,47 @@ from typing import Optional
 
 @dataclass
 class ReagentSpec:
-    """Bir reaktifin turu/rolu - miktar/fiyat icermez, bunlar kullanici girdisi olacak."""
+    """Bir reaktifin türü/rolü - miktar/fiyat içermez, bunlar kullanıcı girdisi olacak."""
     name: str
     category: str
     typical_role: str
     source: str
 
 
-# Altar PEA'da adi gecen reaktif TURLERI icin oneri listesi (miktar/fiyat YOK)
+# Altar PEA'da adı geçen reaktif TÜRLERİ için öneri listesi (miktar/fiyat YOK)
 COPPER_SULFIDE_FLOTATION_REAGENTS = [
     ReagentSpec(
-        "PAX (Potassium Amyl Xanthate)", "toplayici",
-        "Bakir sulfur minerallerini yuzdurmek icin ana toplayici",
-        "Altar PEA, Bolum 17.1.3 / Sekil 17-2",
+        "PAX (Potassium Amyl Xanthate)", "toplayıcı",
+        "Bakır sulfur minerallerini yüzdürmek için ana toplayıcı",
+        "Altar PEA, Bölüm 17.1.3 / Şekil 17-2",
     ),
     ReagentSpec(
-        "Kirec (Lime)", "pH_duzenleyici",
-        "Ortam pH'ini 10.5-11 araliginda tutmak ve pirit bastirmak icin",
-        "Altar PEA, Bolum 17.1.3 / Sekil 17-2",
+        "Kireç (Lime)", "pH_duzenleyici",
+        "Ortam pH'ini 10.5-11 aralığında tutmak ve pirit bastırmak için",
+        "Altar PEA, Bölüm 17.1.3 / Şekil 17-2",
     ),
     ReagentSpec(
-        "MIBC", "kopurtucu",
-        "Kopuk olusturmak icin (frother)",
-        "Altar PEA, Bolum 17.1.3 / Sekil 17-2",
+        "MIBC", "köpürtücü",
+        "Köpük oluşturmak için (frother)",
+        "Altar PEA, Bölüm 17.1.3 / Şekil 17-2",
     ),
     ReagentSpec(
         "Flokulant", "flokulant",
-        "Konsantre/atik koyulasticilarinda cokelmeyi hizlandirmak icin",
-        "Altar PEA, Bolum 17.1.3 / Sekil 17-2",
+        "Konsantre/atık koyulaştırıcılarında çökelmeyi hızlandırmak için",
+        "Altar PEA, Bölüm 17.1.3 / Şekil 17-2",
     ),
 ]
 
-# Bilinen tek guvenilir TOPLU referans deger - kirilim degil, sadece capraz kontrol icin
+# Bilinen tek güvenilir TOPLU referans değer - kırılım değil, sadece çapraz kontrol için
 ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T = 6.93
-ALTAR_TOTAL_PROCESSING_OPEX_SOURCE = "Altar PEA, Tablo 21-2 / 1-4 (2025) - reaktif+asinma+enerji dahil, kirilimsiz"
+ALTAR_TOTAL_PROCESSING_OPEX_SOURCE = "Altar PEA, Tablo 21-2 / 1-4 (2025) - reaktif+aşınma+enerji dahil, kırılımsız"
 
 
 @dataclass
 class ReagentTestDosage:
-    """Laboratuvar test olceginde FIILEN KULLANILMIS reaktif dozaji (g/ton) -
-    kullanicinin girdigi degerle KARSILASTIRMA/BUYUKLUK MERTEBESI kontrolu
-    icin, HESAPLAMAYA VARSAYILAN OLARAK DAHIL EDILMEZ."""
+    """Laboratuvar test ölçeğinde FİİLEN KULLANILMIŞ reaktif dozajı (g/ton) -
+    kullanıcının girdiği değerle KARŞILAŞTIRMA/BÜYÜKLÜK MERTEBESI kontrolü
+    için, HESAPLAMAYA VARSAYILAN OLARAK DAHİL EDİLMEZ."""
     reagent_name: str
     reagent_role: str
     dosage_g_per_t: float
@@ -92,29 +92,29 @@ class ReagentTestDosage:
     source: str
 
 
-# Aranzazu Mine - GERCEK, Locked Cycle Test'te (Tablo 13-10) FIILEN
-# KULLANILMIS reaktif dozajlari. Bu sema, raporun basari olarak sundugu
-# "%21 Cu, 14 g/t Au, 216 g/t Ag konsantre, >%90 Cu kurtarma" sonucunu
-# URETEN gercek reaktif rejimidir - varsayimsal/temsili DEGIL.
-# TEST OLCEGI (5x2kg numune) - tam olcekli tesis tuketimi farkli olabilir.
+# Aranzazu Mine - GERÇEK, Locked Cycle Test'te (Tablo 13-10) FİİLEN
+# KULLANILMIŞ reaktif dozajları. Bu şema, raporun başarı olarak sunduğu
+# "%21 Cu, 14 g/t Au, 216 g/t Ag konsantre, >%90 Cu verim" sonucunu
+# ÜRETEN gerçek reaktif rejimidir - varsayımsal/temsili DEĞİL.
+# TEST ÖLÇEĞİ (5x2kg numune) - tam ölçekli tesis tüketimi farklı olabilir.
 ARANZAZU_LOCKED_CYCLE_TEST_DOSAGES = [
     ReagentTestDosage(
-        "Kirec (Lime)", "pH_duzenleyici/pirit_bastirici", 2000,
-        "Birincil Ogutme (pH 11.3 hedefiyle)",
+        "Kireç (Lime)", "pH_duzenleyici/pirit_bastirici", 2000,
+        "Birincil Öğütme (pH 11.3 hedefiyle)",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-10)",
     ),
     ReagentTestDosage(
-        "Cytec 5100 (thionocarbamate)", "toplayici", 4,
-        "Birincil Ogutme",
+        "Cytec 5100 (thionocarbamate)", "toplayıcı", 4,
+        "Birincil Öğütme",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-10)",
     ),
     ReagentTestDosage(
-        "Cytec 3477 (dithiophosphate)", "toplayici", 4,
-        "Rougher 1+2 + Rougher Scavenger 1+2 (toplam, 1 g/t x 4 asama)",
+        "Cytec 3477 (dithiophosphate)", "toplayıcı", 4,
+        "Rougher 1+2 + Rougher Scavenger 1+2 (toplam, 1 g/t x 4 aşama)",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-10)",
     ),
     ReagentTestDosage(
-        "MIBC", "kopurtucu", 44,
+        "MIBC", "köpürtücü", 44,
         "Rougher 1",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-10)",
     ),
@@ -124,9 +124,9 @@ ARANZAZU_LOCKED_CYCLE_TEST_DOSAGES = [
 @dataclass
 class ArsenicDepressantTrial:
     """Aranzazu cleaner flotasyon testlerinde denenen arsenik depresan
-    secenekleri (Tablo 13-8) - farkli kimyasallarin Cu/As selektivitesine
-    etkisi. SADECE Cu-As (enargit/tennantit) ayirma zorlugu olan skarn/
-    porfiri Cu yataklari icin referans niteliginde."""
+    seçenekleri (Tablo 13-8) - farklı kimyasalların Cu/As selektivitesine
+    etkisi. SADECE Cu-As (enargit/tennantit) ayırma zorluğu olan skarn/
+    porfiri Cu yatakları için referans niteliğinde."""
     compound: str
     dosage_g_per_t: Optional[float]
     addition_point: str
@@ -136,37 +136,37 @@ class ArsenicDepressantTrial:
     source: str
 
 
-# Aranzazu Mine - GERCEK cleaner test sonuclari (Tablo 13-8, secilmis
-# ornekler). Cu-As (Cu/As) orani, konsantredeki Cu/As kutle oranidir -
-# yuksek deger = daha iyi arsenik reddi (selektivite).
+# Aranzazu Mine - GERÇEK cleaner test sonuçları (Tablo 13-8, seçilmiş
+# örnekler). Cu-As (Cu/As) oranı, konsantredeki Cu/As kütle oranıdır -
+# yüksek değer = daha iyi arsenik reddi (selektivite).
 ARANZAZU_ARSENIC_DEPRESSANT_TRIALS = [
     ArsenicDepressantTrial(
         "Depresan yok (baseline)", 0, "-", 87.1, 4.8,
-        "Referans/baseline test - depresansiz",
+        "Referans/baseline test - depresansız",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-8, Test 13)",
     ),
     ArsenicDepressantTrial(
         "Hidrojen Peroksit", 85, "conditioning", 89.1, 6.3,
-        "Marjinal selektivite artisi",
+        "Marjinal selektivite artışı",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-8, Test 16)",
     ),
     ArsenicDepressantTrial(
-        "DETA/SO2 (patentli As depresani)", None, "conditioning", 90.1, 4.5,
-        "DOZAJ DEGERI KAYNAK TABLODA OKUNAKLI DEGIL (Excel tarih formati "
-        "bozulmasi olasi - '17-May' gibi anlamsiz bir deger gorunuyor, "
-        "gercek g/t degeri belirsiz). En yuksek Cu kurtarma gorulen test - "
-        "enargiti AKTIVE etmis gibi gorunuyor (selektiviteyi artirmadi, "
-        "kurtarmayi artirdi).",
+        "DETA/SO2 (patentli As depresanı)", None, "conditioning", 90.1, 4.5,
+        "DOZAJ DEĞERİ KAYNAK TABLODA OKUNAKLI DEĞİL (Excel tarih formatı "
+        "bozulması olası - '17-May' gibi anlamsız bir değer görünüyor, "
+        "gerçek g/t değeri belirsiz). En yüksek Cu verim görülen test - "
+        "enargiti AKTİVE etmiş gibi görünüyor (selektiviteyi artırmadı, "
+        "verimi artırdı).",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-8, Test 18)",
     ),
     ArsenicDepressantTrial(
-        "Sodyum Sulfid (NaS2)", 220, "conditioning", 87.5, 6.6,
-        "REDOX potansiyeli ile dozaj kontrolu yapildi",
+        "Sodyum Sülfid (NaS2)", 220, "conditioning", 87.5, 6.6,
+        "REDOX potansiyeli ile dozaj kontrolü yapıldı",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-8, Test 19)",
     ),
     ArsenicDepressantTrial(
-        "Sodyum Sulfid (NaS2)", 662, "conditioning", 90.1, 6.9,
-        "En yuksek NaS2 dozaji - en iyi selektivite ama yuksek reaktif "
+        "Sodyum Sülfid (NaS2)", 662, "conditioning", 90.1, 6.9,
+        "En yüksek NaS2 dozajı - en iyi selektivite ama yüksek reaktif "
         "maliyeti",
         "Aranzazu NI 43-101 (2018 TR, Tablo 13-8, Test 35)",
     ),
@@ -175,7 +175,7 @@ ARANZAZU_ARSENIC_DEPRESSANT_TRIALS = [
 
 @dataclass
 class UserReagentInput:
-    """Kullanicinin (sirketin) kendi tedarikcisinden aldigi gercek veri."""
+    """Kullanıcının (şirketin) kendi tedarikçisinden aldığı gerçek veri."""
     name: str
     consumption_kg_per_t: float
     unit_price_usd_per_kg: float
@@ -183,11 +183,11 @@ class UserReagentInput:
 
 def calculate_reagent_cost(daily_tonnage: float, user_inputs: list) -> dict:
     """
-    Kullanicinin girdigi gercek tuketim + fiyat verisinden maliyet hesaplar.
-    Hicbir varsayilan/uydurma deger icermez - tum sayisal degerler kullanici girdisidir.
+    Kullanıcının girdiği gerçek tüketim + fiyat verisinden maliyet hesaplar.
+    Hiçbir varsayılan/uydurma değer içermez - tüm sayısal değerler kullanıcı girdisidir.
     """
     if not user_inputs:
-        raise ValueError("En az 1 reaktif girdisi gerekli (kullanici kendi tedarikci verisini girmeli).")
+        raise ValueError("En az 1 reaktif girdisi gerekli (kullanıcı kendi tedarikçi verisini girmeli).")
 
     line_items = []
     total_cost_per_t = 0.0
@@ -210,23 +210,23 @@ def calculate_reagent_cost(daily_tonnage: float, user_inputs: list) -> dict:
         "total_annual_cost_usd": round(total_cost_per_t * daily_tonnage * 365, 2),
         "line_items": line_items,
         "benchmark_note": (
-            f"Karsilastirma icin: Altar Project raporunda toplam isleme maliyeti "
-            f"(reaktif+asinma+enerji, kirilimsiz) ${ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T}/ton "
-            f"olarak raporlanmisti ({ALTAR_TOTAL_PROCESSING_OPEX_SOURCE}). Girilen sadece "
-            f"reaktif maliyeti oldugu icin bu rakamdan DUSUK cikmasi beklenir - "
-            f"aradaki fark asinma malzemesi + enerji maliyetini temsil eder."
+            f"Karşılaştırma için: Altar Project raporunda toplam işleme maliyeti "
+            f"(reaktif+aşınma+enerji, kırılımsız) ${ALTAR_TOTAL_PROCESSING_OPEX_USD_PER_T}/ton "
+            f"olarak raporlanmıştı ({ALTAR_TOTAL_PROCESSING_OPEX_SOURCE}). Girilen sadece "
+            f"reaktif maliyeti olduğu için bu rakamdan DÜŞÜK çıkması beklenir - "
+            f"aradaki fark aşınma malzemesi + enerji maliyetini temsil eder."
         ),
     }
 
 
 if __name__ == "__main__":
-    print("Reaktif Maliyeti Hesaplama - ORNEK Kullanim\n" + "-" * 55)
-    print("(Asagidaki sayilar SADECE TEMSILI ORNEK - gercek tedarikci verisi DEGIL,")
-    print(" gercek kullanimda bu degerler kullanici tarafindan girilecek)\n")
+    print("Reaktif Maliyeti Hesaplama - ÖRNEK Kullanım\n" + "-" * 55)
+    print("(Aşağıdaki sayılar SADECE TEMSİLİ ÖRNEK - gerçek tedarikçi verisi DEĞİL,")
+    print(" gerçek kullanımda bu değerler kullanıcı tarafından girilecek)\n")
 
     ornek_girdi = [
         UserReagentInput("PAX", consumption_kg_per_t=0.010, unit_price_usd_per_kg=4.20),
-        UserReagentInput("Kirec (Lime)", consumption_kg_per_t=1.0, unit_price_usd_per_kg=0.35),
+        UserReagentInput("Kireç (Lime)", consumption_kg_per_t=1.0, unit_price_usd_per_kg=0.35),
         UserReagentInput("MIBC", consumption_kg_per_t=0.015, unit_price_usd_per_kg=3.80),
     ]
 
@@ -238,15 +238,15 @@ if __name__ == "__main__":
             f"${item['unit_price_usd_per_kg']:.2f}/kg = ${item['cost_usd_per_t']:.4f}/t"
         )
 
-    print(f"\n  TOPLAM (bu ornek girdiyle): ${sonuc['total_cost_usd_per_t']:.2f}/ton")
+    print(f"\n  TOPLAM (bu örnek girdiyle): ${sonuc['total_cost_usd_per_t']:.2f}/ton")
     print(f"\n{sonuc['benchmark_note']}")
 
-    print("\n--- Aranzazu Locked Cycle Test Reaktif Dozajlari (Tablo 13-10) ---")
-    print("(GERCEK test verisi - TEST OLCEGI, tam olcekli tesis tuketimi degil)")
+    print("\n--- Aranzazu Locked Cycle Test Reaktif Dozajları (Tablo 13-10) ---")
+    print("(GERÇEK test verisi - TEST ÖLÇEĞİ, tam ölçekli tesis tüketimi değil)")
     for d in ARANZAZU_LOCKED_CYCLE_TEST_DOSAGES:
         print(f"  [{d.reagent_name}] {d.dosage_g_per_t} g/t - {d.test_stage}")
 
-    print("\n--- Aranzazu Arsenik Depresan Deneme Sonuclari (Tablo 13-8) ---")
+    print("\n--- Aranzazu Arsenik Depresan Deneme Sonuçları (Tablo 13-8) ---")
     for t in ARANZAZU_ARSENIC_DEPRESSANT_TRIALS:
         dozaj = f"{t.dosage_g_per_t} g/t" if t.dosage_g_per_t is not None else "dozaj belirsiz"
-        print(f"  [{t.compound}] {dozaj} -> Cu Kurtarma: %{t.cu_recovery_pct}, Cu/As oran: {t.cu_as_selectivity_ratio}")
+        print(f"  [{t.compound}] {dozaj} -> Cu Verim: %{t.cu_recovery_pct}, Cu/As oran: {t.cu_as_selectivity_ratio}")

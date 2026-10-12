@@ -1,36 +1,36 @@
 """
-Mineral Kaynak Ozeti ve NSR (Net Smelter Return) Modulu
+Mineral Kaynak Özeti ve NSR (Net Smelter Return) Modülü
 ===========================================================
 Kaynak: Aranzazu Mine NI 43-101 Teknik Raporu (Aura Minerals Inc. / SLR
-Consulting, 28 Mart 2025, gecerlilik tarihi 31 Aralik 2024) - Bolum 14
+Consulting, 28 Mart 2025, geçerlilik tarihi 31 Aralık 2024) - Bölüm 14
 (Mineral Resource Estimates), Tablo 14-1 ve 14-2.
 
-Icerik:
-1. NSR (Net Smelter Return) hesabi - raporun KENDI KULLANDIGI, ACIKCA
-   BELIRTILMIS formul (Tablo 14-1, Not 7): kaynak siniri belirlemede
-   kullanilan GERCEK denklem. Bu, "1 birim tenorun $ olarak degeri ne"
-   sorusuna hizli bir cevap saglar - CAPEX/OPEX modulundeki gibi genel
-   bir muhendislik yontemi degil, DOGRUDAN bu rapora/bu metal fiyati
-   varsayimina OZEL bir denklemdir.
-2. Aranzazu Mineral Kaynak ozet tablolari (Tablo 14-1: kaynaklar REZERVLERI
-   DAHIL EDEREK, Tablo 14-2: kaynaklar REZERVLERI HARIC TUTARAK) - GERCEK,
-   dogrulanmis rapor verisi.
+İçerik:
+1. NSR (Net Smelter Return) hesabı - raporun KENDİ KULLANDIĞI, AÇIKÇA
+   BELİRTİLMİŞ formül (Tablo 14-1, Not 7): kaynak sınırı belirlemede
+   kullanılan GERÇEK denklem. Bu, "1 birim tenörün $ olarak değeri ne"
+   sorusuna hızlı bir cevap sağlar - CAPEX/OPEX modülündeki gibi genel
+   bir mühendislik yöntemi değil, DOĞRUDAN bu rapora/bu metal fiyatı
+   varsayımına ÖZEL bir denklemdir.
+2. Aranzazu Mineral Kaynak özet tabloları (Tablo 14-1: kaynaklar REZERVLERİ
+   DAHİL EDEREK, Tablo 14-2: kaynaklar REZERVLERİ HARİÇ TUTARAK) - GERÇEK,
+   doğrulanmış rapor verisi.
 
-ONEMLI SINIRLAMA - NSR FORMULU SADECE BU RAPORA OZELDIR:
-NSR katsayilari (74.553 / 47.932 / 0.431), raporun kullandigi METAL
-FIYATI VARSAYIMLARINA (Au $2,000/oz, Cu $4.20/lb, Ag $25/oz), KURTARMA
+ÖNEMLİ SINIRLAMA - NSR FORMÜLÜ SADECE BU RAPORA ÖZELDİR:
+NSR katsayıları (74.553 / 47.932 / 0.431), raporun kullandığı METAL
+FİYATI VARSAYIMLARINA (Au $2,000/oz, Cu $4.20/lb, Ag $25/oz), VERİM
 ORANLARINA (%91.3 Cu, %79.5 Au, %62.8 Ag) VE USD/MXN KURUNA (1:20.5)
-GOMULUDUR. Farkli bir metal fiyati senaryosu icin (orn. Cu $5.00/lb)
-bu katsayilar GECERSIZDIR - yeniden hesaplanmalari gerekir. Bu modul
-BILINCLI OLARAK "genel bir NSR hesaplayici" SUNMAZ (cunku smelter/
-refining deduction oranlari projeye/sozlesmeye ozeldir ve raporda
-ayrintili verilmez) - sadece RAPORUN KENDI sabit katsayili denklemini
-uygular, "bu rapordaki varsayimlarla NSR ne olurdu" sorusuna cevap verir.
+GÖMÜLÜDÜR. Farklı bir metal fiyatı senaryosu için (orn. Cu $5.00/lb)
+bu katsayılar GEÇERSİZDİR - yeniden hesaplanmaları gerekir. Bu modül
+BİLİNÇLİ OLARAK "genel bir NSR hesaplayıcı" SUNMAZ (çünkü smelter/
+refining deduction oranları projeye/sözleşmeye özeldir ve raporda
+ayrıntılı verilmez) - sadece RAPORUN KENDİ sabit katsayılı denklemini
+uygular, "bu rapordaki varsayımlarla NSR ne olurdu" sorusuna cevap verir.
 
-MIMARI NOT: Kaynak/rezerv siniflandirmasi (Measured/Indicated/Inferred,
-CIM 2014 tanimlari) burada YENIDEN HESAPLANMAZ - bu, Qualified Person (QP)
-tarafindan yapilmis resmi bir siniflandirmadir, sadece rapor edilen
-sonuclar referans olarak sunulur.
+MİMARİ NOT: Kaynak/rezerv sınıflandırması (Measured/Indicated/Inferred,
+CIM 2014 tanımları) burada YENİDEN HESAPLANMAZ - bu, Qualified Person (QP)
+tarafından yapılmış resmi bir sınıflandırmadır, sadece rapor edilen
+sonuçlar referans olarak sunulur.
 """
 
 from dataclasses import dataclass
@@ -42,18 +42,18 @@ def calculate_nsr(
     ag_gpt: float,
 ) -> dict:
     """
-    Aranzazu raporunun (Tablo 14-1, Not 7) ACIKCA belirttigi NSR formulunu
+    Aranzazu raporunun (Tablo 14-1, Not 7) AÇIKÇA belirttiği NSR formülünü
     uygular:
 
         NSR ($/t) = 74.553 x Cu(%) + 47.932 x Au(g/t) + 0.431 x Ag(g/t)
 
-    Bu katsayilar, raporun metal fiyati varsayimlarina (Au $2,000/oz,
-    Cu $4.20/lb, Ag $25/oz), kurtarma oranlarina (%91.3 Cu, %79.5 Au,
-    %62.8 Ag) ve USD/MXN kuruna (1:20.5) GOMULUDUR - farkli bir fiyat
-    senaryosu icin GECERSIZDIR.
+    Bu katsayılar, raporun metal fiyatı varsayımlarına (Au $2,000/oz,
+    Cu $4.20/lb, Ag $25/oz), verim oranlarına (%91.3 Cu, %79.5 Au,
+    %62.8 Ag) ve USD/MXN kuruna (1:20.5) GÖMÜLÜDÜR - farklı bir fiyat
+    senaryosu için GEÇERSİZDİR.
     """
     if cu_pct < 0 or au_gpt < 0 or ag_gpt < 0:
-        raise ValueError("Tenor degerleri negatif olamaz.")
+        raise ValueError("Tenör değerleri negatif olamaz.")
 
     cu_term = 74.553 * cu_pct
     au_term = 47.932 * au_gpt
@@ -78,7 +78,7 @@ def calculate_nsr(
             "Bu katsayılar SADECE bu rapordaki metal fiyatı/verim "
             "varsayımlarıyla geçerlidir - farklı bir fiyat senaryosu için "
             "YENİDEN HESAPLANMALIDIR (bu modül böyle bir yeniden hesaplama "
-            "aracı SUNMAZ, çünkü smelter/rafine kesinti oranları rapor "
+            "araçı SUNMAZ, çünkü smelter/rafine kesinti oranları rapor "
             "tarafından ayrıntılı verilmemiştir)."
         ),
     }
@@ -89,9 +89,9 @@ def check_nsr_against_cutoff(
     cutoff_usd_per_t: float = 50.0,
 ) -> dict:
     """
-    Hesaplanan NSR'yi, raporun Mineral Kaynak siniri icin kullandigi
-    kesim degeriyle ($50/t, Tablo 14-1 Not 5) karsilastirir. SADECE
-    bilgi amaclidir - madencilik/isleme karari icin QP degerlendirmesi
+    Hesaplanan NSR'yi, raporun Mineral Kaynak sınırı için kullandığı
+    kesim değeriyle ($50/t, Tablo 14-1 Not 5) karşılaştırır. SADECE
+    bilgi amaçlıdır - madencilik/işleme kararı için QP değerlendirmesi
     gerekir.
     """
     above_cutoff = nsr_usd_per_t >= cutoff_usd_per_t
@@ -123,8 +123,8 @@ class ResourceCategory:
     ag_contained_000oz: float
 
 
-# Tablo 14-1: Mineral Kaynaklar REZERVLERI DAHIL EDEREK raporlanmis
-# (Inclusive of Mineral Reserves) - 31 Aralik 2024
+# Tablo 14-1: Mineral Kaynaklar REZERVLERİ DAHİL EDEREK raporlanmış
+# (Inclusive of Mineral Reserves) - 31 Aralık 2024
 ARANZAZU_RESOURCES_INCLUSIVE = [
     ResourceCategory("Measured", 11834, 1.28, 0.90, 19, 334546, 342, 7388),
     ResourceCategory("Indicated", 8279, 1.03, 0.57, 18, 187374, 152, 4872),
@@ -132,8 +132,8 @@ ARANZAZU_RESOURCES_INCLUSIVE = [
     ResourceCategory("Inferred", 5623, 0.82, 0.44, 14, 101897, 79, 2496),
 ]
 
-# Tablo 14-2: Mineral Kaynaklar REZERVLERI HARIC TUTARAK raporlanmis
-# (Exclusive of Mineral Reserves) - 31 Aralik 2024
+# Tablo 14-2: Mineral Kaynaklar REZERVLERİ HARİÇ TUTARAK raporlanmış
+# (Exclusive of Mineral Reserves) - 31 Aralık 2024
 ARANZAZU_RESOURCES_EXCLUSIVE = [
     ResourceCategory("Measured", 6069, 1.06, 0.80, 17, 141893, 155, 3262),
     ResourceCategory("Indicated", 4167, 0.81, 0.47, 14, 74710, 64, 1915),
@@ -143,20 +143,20 @@ ARANZAZU_RESOURCES_EXCLUSIVE = [
 
 ARANZAZU_RESOURCE_SOURCE = (
     "Aranzazu NI 43-101 (SLR, 28 Mart 2025), Tablo 14-1 (Inclusive) / "
-    "14-2 (Exclusive), 31 Aralık 2024 itibariyle. CIM (2014) tanımlarına "
+    "14-2 (Exclusive), 31 Aralık 2024 itibarıyla. CIM (2014) tanımlarına "
     "göre sınıflandırılmış, NSR kesim değeri \\$45-50/t, min. 2.0m madencilik "
     "genişliği varsayımlarına dayanır."
 )
 
 
 if __name__ == "__main__":
-    print("Mineral Kaynak Ozeti ve NSR Modulu - Dogrulama\n" + "-" * 55)
+    print("Mineral Kaynak Özeti ve NSR Modülü - Doğrulama\n" + "-" * 55)
 
-    print("--- 1. NSR Hesabi (Tablo 14-1, Not 7 formulu) ---")
+    print("--- 1. NSR Hesabı (Tablo 14-1, Not 7 formülü) ---")
     test_cases = [
-        (1.51, 0.76, 21.03, "2024 fiili ortalama tenor"),
-        (1.18, 0.76, 19, "Toplam M+I kaynak ortalama tenoru"),
-        (0.5, 0.3, 10, "Dusuk tenor senaryosu"),
+        (1.51, 0.76, 21.03, "2024 fiili ortalama tenör"),
+        (1.18, 0.76, 19, "Toplam M+I kaynak ortalama tenörü"),
+        (0.5, 0.3, 10, "Düşük tenör senaryosu"),
     ]
     for cu, au, ag, label in test_cases:
         nsr_sonuc = calculate_nsr(cu, au, ag)
