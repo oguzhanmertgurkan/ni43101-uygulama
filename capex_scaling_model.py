@@ -259,6 +259,7 @@ ALAN_TURLERI = {
     "asit_tesisi": "Sülfürik asit tesisi",
     "on_koyulastirma": "Liç öncesi koyulaştırma ve kaba ayıklama (trash screen)",
     "cil": "Siyanür liçi, CIP/CIL ve detoks",
+    "karbon_adsorpsiyon": "Karbon adsorpsiyonu (CIC kolonları, yığın liçi sonrası)",
     "adr": "ADR (karbon geri kazanım) ve rafineri",
     "gravite": "Gravite ayırma (jig, spiral, masa, santrifüj)",
     "dms": "Ağır ortam ayırma (DMS)",
@@ -499,7 +500,55 @@ CACTUS_DATA_POINT = CapexDataPoint(
                    "Bakım parçaları": 0.42, "Sarf ve hizmetler": 0.12}.items()},
 )
 
-ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, ENCHI_DATA_POINT, CACTUS_DATA_POINT, LA_MINA_DATA_POINT]
+# ------------------------------------------------------------------
+# Santa Fe Project - Tablo 21-4 (Processing and Infrastructure, pre-production), PEA, KCA / RESPEC,
+# Lahontan Gold Corp., rapor tarihi 24 Ocak 2025 (geçerlilik 10 Aralık 2024). Nevada, ABD.
+# Au yığın liçi + karbon adsorpsiyonu + ADR. Flotasyon YOK. 12,500 t/gün (metrik).
+# Tablodaki alan tutarları disiplin bazlı doğrudan maliyettir (toprak işleri, inşaat, çelik, ekipman, boru,
+# elektrik, enstrümantasyon); gider payı ve yedek parça tabloda ayrı satırdır.
+# ------------------------------------------------------------------
+_SF_KAYNAK = "Santa Fe PEA (KCA/RESPEC, 24 Ocak 2025), Tablo 21-4 (pre-production)"
+_SF_ALANLAR_KUSD = [
+    # (alan_kodu, rapor_adi, kUSD, not)
+    ("kirma", "Crushing", 21_718, "Üç kademeli kırma, P80 12.7 mm"),
+    ("stok", "Crushed Ore, Reclaim & Stacking", 14_072, "Kırılmış cevher geri alma ve istif konveyörleri"),
+    ("heap_leach", "Heap Leach Pad & Ponds", 20_373, "Pad, astar ve havuzlar (toprak işleri ağırlıklı)"),
+    ("karbon_adsorpsiyon", "Carbon Adsorption", 2_649, "Yığın liçi pregnant solüsyonu için karbon kolonları"),
+    ("adr", "Carbon Desorption & Reactivation + Refinery", 8_800 + 5_086,
+     "Elüsyon, karbon rejenerasyonu ve rafineri; ADR tedarikçi paketi (mühendislik ve devreye alma dahil)"),
+    ("reaktif", "Reagents", 965, ""),
+    ("yardimci", "Water Supply, Storage & Distribution", 1_747, "Yalnızca su temini ve dağıtımı"),
+]
+SANTA_FE_DATA_POINT = CapexDataPoint(
+    project="Santa Fe Project",
+    capacity_tpd=12_500,                   # 4.5625 Mtpa; rapor metrik ton
+    base_year=2024,                         # rapor: 2024 4. çeyrek dolar, -%30/+%30
+    basslik_capex_usd=135_066_000,          # Tablo 21-1 pre-production toplamı (işletme sermayesi dahil)
+    kapsam=CapexKapsam(
+        tsf_dahil=False,             # yığın liçi pad'i proses alanı; atık barajı yok (heap)
+        dis_altyapi_dahil=False,     # güç, tesis binaları ve laboratuvar alanlara dahil değil
+        gider_payi_dahil=False,      # Tablo 21-4'te ayrı satır (16.2M$), alanlara dağıtılmamış
+        dolayli_dahil=False,         # EPCM (8.7M$) ve inşaat dolayları (1.4M$) ayrı
+        sahip_maliyeti_dahil=False,  # sahip maliyetleri (4.5M$) ayrı
+    ),
+    alanlar=[CapexAlan(k, ad, kusd * 1000, kaynak=_SF_KAYNAK, not_=n) for k, ad, kusd, n in _SF_ALANLAR_KUSD],
+    source="Santa Fe Project NI 43-101 PEA Teknik Raporu (KCA ve RESPEC, Lahontan Gold Corp. için), "
+           "24 Ocak 2025; doğruluk -%30/+%30; 2024 Q4 fiyatları; USD, metrik ton",
+    notlar=(
+        "Tablo 21-4'te disiplin bazlı doğrudan maliyetler toplamı 88.3M$. Alanlara DAHİL DEĞİL: laboratuvar "
+        "(2.4M$), güç (1.9M$), tesis binaları (2.6M$), hareketli ekipman (5.9M$), yedek parça (1.2M$), gider payı "
+        "(16.2M$), EPCM (8.7M$), inşaat dolayları (1.4M$), sahip maliyetleri (4.5M$), ilk dolumlar (0.5M$) ve "
+        "işletme sermayesi (10.7M$). Küçük ölçekli (12,500 t/gün) Nevada yığın liçi projesidir; PEA düzeyi "
+        "(-%30/+%30) olduğundan güvenilirlik fizibilite çalışmalarından düşüktür."
+    ),
+    seviyeler=(),
+    proses="Au yığın liçi + karbon adsorpsiyonu + ADR - flotasyon yok",
+    isleme_opex_usd_t=4.98,
+    opex_kirilim={"İşçilik": 1.60, "Güç": 0.41, "Sarf": 0.52, "Reaktif": 2.24, "Bakım": 0.21},
+)
+
+ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, ENCHI_DATA_POINT, CACTUS_DATA_POINT,
+                   SANTA_FE_DATA_POINT, LA_MINA_DATA_POINT]
 
 
 def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
