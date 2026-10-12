@@ -294,6 +294,7 @@ with tab3:
         cs = p.capex_seviye(seviye)
         satirlar.append({
             "Proje": p.project,
+            "Proses": p.proses,
             "Kapasite (tpd)": f"{p.capacity_tpd:,.0f}",
             "Baz yılı": p.base_year,
             "Başlık CAPEX": f"${p.basslik_capex_usd:,.0f}",
@@ -411,7 +412,7 @@ with tab3:
             nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                "CAPEX (USD)": cs * duzeltme,
                                "Durum": f"Doğrulanmış (seviye {seviye})"})
-        elif not p.kapsam_dogrulandi:
+        elif not p.kapsam_dogrulandi and not p.alanlar:
             nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                "CAPEX (USD)": p.basslik_capex_usd,
                                "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
@@ -472,6 +473,9 @@ with tab3:
     if ogrenilen:
         st.caption("Raporlardan öğrenilen oranlar: " + " | ".join(ogrenilen))
 
+    if "kirma_ogutme" in secilen and any(k in secilen for k in ("kirma", "stok", "ogutme")):
+        st.warning("'Kırma + öğütme (birleşik)' ile ayrı kırma/stok/öğütme alanlarını birlikte seçme: "
+                   "çift sayılır. Birini seç.")
     satirlar = []
     alt_toplam = ust_toplam = 0.0
     eksik = []
@@ -508,6 +512,24 @@ with tab3:
             "değildir. Altar değerleri yalnızca ekipman satın alma + montajdır (saha tesisleri hariç); Furnas "
             "değerleri raporun doğrudan maliyetidir (inşaat, boru ve elektrik dahil)."
         )
+
+    # --- İşleme işletme gideri (OPEX) referansları ---
+    st.subheader("İşleme işletme gideri (OPEX) referansları")
+    opex_rows = []
+    for p in ALL_DATA_POINTS:
+        if p.isleme_opex_usd_t is None:
+            continue
+        opex_rows.append({
+            "Proje": p.project, "Proses": p.proses, "Kapasite (tpd)": f"{p.capacity_tpd:,.0f}",
+            "Baz yılı": p.base_year, "Toplam ($/t)": f"{p.isleme_opex_usd_t:.2f}",
+            "Rapor kırılımı ($/t)": "; ".join(f"{k} {v:.2f}" for k, v in p.opex_kirilim.items()),
+        })
+    st.dataframe(pd.DataFrame(opex_rows), hide_index=True, use_container_width=True)
+    st.caption(
+        "Kırılım kalemleri raporlar arasında aynı değildir (Altar kalemlere, Furnas ve Cerro Blanco alana ya da "
+        "maliyet türüne göre ayırır), bu yüzden yalnızca toplamlar karşılaştırılabilir. Baz yılları ve "
+        "proses türleri farklıdır."
+    )
 
 
 # ------------------------------------------------------------------

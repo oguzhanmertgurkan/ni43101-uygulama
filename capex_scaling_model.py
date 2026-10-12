@@ -109,6 +109,10 @@ class CapexDataPoint:
     seviyeler: tuple = ("A", "B", "C", "D")
     # Alan (unit operation) bazlı döküm; yoksa boş
     alanlar: list = field(default_factory=list)
+    proses: str = "Cu flotasyonu"
+    # İşleme işletme gideri (OPEX) referansı: toplam $/t ve raporun kırılımı
+    isleme_opex_usd_t: Optional[float] = None
+    opex_kirilim: dict = field(default_factory=dict)
 
     @property
     def kapsam_dogrulandi(self) -> bool:
@@ -119,8 +123,20 @@ class CapexDataPoint:
         return bool(self.kalemler) and all(b is not None for b in bayraklar)
 
     @property
+    def alan_dogrulandi(self) -> bool:
+        """Alan bazlı döküm var ve kapsam bayraklarının hiçbiri belirsiz değil."""
+        k = self.kapsam
+        bayraklar = [k.tsf_dahil, k.dis_altyapi_dahil, k.gider_payi_dahil,
+                     k.dolayli_dahil, k.sahip_maliyeti_dahil]
+        return bool(self.alanlar) and all(b is not None for b in bayraklar)
+
+    @property
     def durum(self) -> str:
-        return "Doğrulanmış" if self.kapsam_dogrulandi else "Belirsiz (hesaba katılmaz)"
+        if self.kapsam_dogrulandi:
+            return "Doğrulanmış"
+        if self.alan_dogrulandi:
+            return "Yalnızca alan bazlı (tesis toplamına girmez)"
+        return "Belirsiz (hesaba katılmaz)"
 
     def capex_seviye(self, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
         """Kalemlerden istenen kapsam seviyesine göre CAPEX; döküm yoksa None."""
@@ -224,6 +240,7 @@ FURNAS_DATA_POINT = CapexDataPoint(
 # (kod, etiket, veri_var): veri_var=False olan alanlar için henüz doğrulanmış
 # rapor verisi yok; uygulamada "veri yok" olarak gösterilir.
 ALAN_TURLERI = {
+    "kirma_ogutme": "Kırma + öğütme (birleşik: kırma, stok, öğütme)",
     "kirma": "Kırma",
     "stok": "Kırılmış cevher stoku ve geri alma",
     "ogutme": "Öğütme (SAG/bilyalı + siklon)",
@@ -231,7 +248,7 @@ ALAN_TURLERI = {
     "flotasyon": "Flotasyon",
     "konsantre_koyulastirma": "Konsantre koyulaştırma",
     "konsantre_filtrasyon": "Konsantre filtrasyonu ve depolama",
-    "atik_koyulastirma": "Atık / macun koyulaştırma",
+    "atik_koyulastirma": "Atık koyulaştırma, filtrasyon veya macun (tesis içi)",
     "reaktif": "Reaktif ve flokülant tesisi",
     "elektrik_kontrol": "Elektrik ve kontrol",
     "boru": "Tesis içi borulama",
@@ -240,7 +257,7 @@ ALAN_TURLERI = {
     "heap_leach": "Heap leach (aglomerasyon, istif, pad)",
     "sx_ew": "SX-EW",
     "asit_tesisi": "Sülfürik asit tesisi",
-    "cil": "Siyanür liçi / CIL / CIP",
+    "cil": "Siyanür liçi, CIP/CIL ve detoks",
     "adr": "ADR (karbon geri kazanım) ve rafineri",
     "gravite": "Gravite ayırma (jig, spiral, masa, santrifüj)",
     "dms": "Ağır ortam ayırma (DMS)",
@@ -292,6 +309,9 @@ def _altar_alanlari() -> list:
 
 
 ALTAR_DATA_POINT.alanlar = _altar_alanlari()
+ALTAR_DATA_POINT.isleme_opex_usd_t = 6.93   # Altar PEA, Tablo 21-10 (60,000 tpd)
+ALTAR_DATA_POINT.opex_kirilim = {"Ekipman işletme": 1.07, "Güç": 2.31, "Reaktif ve aşınma malzemesi": 2.15,
+                                 "Saatlik işçilik": 0.85, "Maaşlı personel": 0.11, "Çeşitli": 0.44}
 
 # Furnas - Tablo 21-8 (doğrudan) ve 21-9 (maliyet tahsisi): alan bazlı
 # (rapor alanı, alan_kodu, doğrudan, dolaylı, gider payı), milyon USD
@@ -307,6 +327,9 @@ _FURNAS_ALANLAR_MUSD = [
     ("Electricity and control", "elektrik_kontrol", 19, 10, 10),
     ("Piping in-plant", "boru", 8, 3, 4),
 ]
+FURNAS_DATA_POINT.isleme_opex_usd_t = 8.92    # Furnas PEA, Tablo 21-23
+FURNAS_DATA_POINT.opex_kirilim = {"Kırma": 0.93, "Öğütme": 3.85, "Flotasyon": 1.38, "Tatlı su": 0.07,
+                                  "Koyulaştırma ve konsantre filtrasyonu": 0.40, "İdari": 1.11, "Atık": 1.17}
 FURNAS_DATA_POINT.alanlar = [
     CapexAlan(kod, ad, d * 1e6, di * 1e6, g * 1e6,
               kaynak="Furnas PEA, Tablo 21-8 / 21-9",
@@ -314,7 +337,53 @@ FURNAS_DATA_POINT.alanlar = [
     for ad, kod, d, di, g in _FURNAS_ALANLAR_MUSD
 ]
 
-ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, LA_MINA_DATA_POINT]
+# ------------------------------------------------------------------
+# Cerro Blanco - Tablo 21.1 (WBS 600 Process Plant), FS, GMS / Bluestone, 6 Nisan 2022
+# Altın: kırma/öğütme, lixiviation (leach + CIP carousel), refinery. Flotasyon YOK.
+# ------------------------------------------------------------------
+_CB_KAYNAK = "Cerro Blanco FS (GMS/Bluestone, 6 Nisan 2022), Tablo 21.1, WBS 600"
+CERRO_BLANCO_DATA_POINT = CapexDataPoint(
+    project="Cerro Blanco Project",
+    capacity_tpd=11747,
+    base_year=2021,         # rapor: tahmin baz tarihi Q4 2021
+    basslik_capex_usd=571_500_000,   # başlangıç yatırımı (üretim öncesi gelir düşülmüş), proje toplamı
+    kapsam=CapexKapsam(
+        tsf_dahil=False,            # kuru istif tesisi (DSTF) WBS 370'te, process plant dışı
+        dis_altyapi_dahil=False,    # altyapı, güç, su yönetimi WBS 100-300'de
+        gider_payi_dahil=False,     # proje gider payı ($60.7M) proje düzeyinde, alanlara dağıtılmamış
+        dolayli_dahil=False,        # inşaat dolayları (WBS 700) proje düzeyinde
+        sahip_maliyeti_dahil=False, # WBS 800 ayrı
+    ),
+    alanlar=[
+        CapexAlan("kirma_ogutme", "Comminution (WBS 610)", 53.2e6, kaynak=_CB_KAYNAK),
+        CapexAlan("cil", "Lixiviation (WBS 640)", 29.5e6, kaynak=_CB_KAYNAK,
+                  not_="Rapora göre leach + CIP carousel devresi"),
+        CapexAlan("reaktif", "Reagents (WBS 650)", 3.6e6, kaynak=_CB_KAYNAK),
+        CapexAlan("adr", "Refinery (WBS 660)", 9.7e6, kaynak=_CB_KAYNAK,
+                  not_="Elüsyon (Zadra) devresinin Lixiviation ya da Refinery içinde olduğu raporda alan "
+                       "başlığıyla ayrılmamış"),
+        CapexAlan("atik_koyulastirma", "Tailings Management (WBS 680)", 29.6e6, kaynak=_CB_KAYNAK,
+                  not_="Kuru istif için atık filtrasyonu ve taşıma; TSF/DSTF'nin kendisi dahil değil"),
+        CapexAlan("boru", "Pipe Rack (WBS 602)", 2.2e6, kaynak=_CB_KAYNAK),
+        CapexAlan("yardimci", "Process Plant Services (WBS 690), yeraltı hizmetleri (603), ROM pad ve MSE duvarı (604), "
+                              "son tesviye (605)", 7.4e6 + 0.2e6 + 1.3e6 + 0.3e6, kaynak=_CB_KAYNAK),
+    ],
+    source="Cerro Blanco N.I. 43-101 Teknik Rapor ve Fizibilite Çalışması (GMS, Bluestone için), "
+           "6 Nisan 2022; AACE Class 3 (-%10/+%15); tahmin baz tarihi Q4 2021; USD",
+    notlar=(
+        "Process plant (WBS 600) doğrudan toplamı $136.9M. Process plant elektrik odaları ($18.8M, WBS 260), "
+        "process plant altyapısı ($6.8M, WBS 160), proses üretim öncesi ($29.2M, WBS 950) ve ilk dolum/yedek "
+        "($6.6M, WBS 960) bu alanlara DAHİL DEĞİL. Dolaylı maliyet (WBS 700 $66.3M) ve gider payı ($60.7M) "
+        "proje düzeyinde, alanlara dağıtılmamış; bu nedenle yalnızca doğrudan alan maliyetleri kullanılır. "
+        "Alan toplamı ($137.0M) rapor toplamıyla (136.9M) yuvarlama farkıyla tutuyor."
+    ),
+    seviyeler=(),
+    proses="Au siyanürleme (CIP) - flotasyon yok",
+    isleme_opex_usd_t=12.97,
+    opex_kirilim={"İşçilik": 0.71, "Güç": 5.11, "Bakım ve sarf": 3.60, "Reaktif": 3.41, "Diğer": 0.09},
+)
+
+ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, LA_MINA_DATA_POINT]
 
 
 def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
@@ -467,8 +536,10 @@ def estimate_process_capex(
     }
 
 
-def alan_dokumu(p: CapexDataPoint) -> dict:
-    """Bir veri noktasının alanlarını alan_kodu'na göre toplar (doğrudan, dolaylı, gider payı)."""
+def alan_dokumu(p: CapexDataPoint, turetilmis: bool = False) -> dict:
+    """Bir veri noktasının alanlarını alan_kodu'na göre toplar (doğrudan, dolaylı, gider payı).
+    turetilmis=True ise ayrı satır veren raporlar için birleşik 'kirma_ogutme' satırı da türetilir
+    (toplamlara karıştırılmaması için varsayılan kapalı)."""
     out = {}
     for a in p.alanlar:
         d = out.setdefault(a.alan_kodu, {"dogrudan": 0.0, "dolayli": 0.0, "gider_payi": 0.0,
@@ -483,6 +554,15 @@ def alan_dokumu(p: CapexDataPoint) -> dict:
         else:
             d["gider_payi"] += a.gider_payi_usd
         d["rapor_adlari"].append(a.rapor_adi)
+    # Birleşik kırma+öğütme: ayrı satır veren raporlardan türetilir (kırma, stok, öğütme)
+    if turetilmis and "kirma_ogutme" not in out:
+        parcalar = [out[k] for k in ("kirma", "stok", "ogutme") if k in out]
+        if parcalar and "kirma" in out and "ogutme" in out:
+            out["kirma_ogutme"] = {
+                "dogrudan": sum(x["dogrudan"] for x in parcalar), "dolayli": 0.0, "gider_payi": 0.0,
+                "dolayli_var": False, "gider_payi_var": False,
+                "rapor_adlari": ["türetilmiş: kırma + stok + öğütme"],
+            }
     return out
 
 
@@ -502,15 +582,16 @@ def estimate_area_capex(
     points = ALL_DATA_POINTS if points is None else points
     refs = []
     for p in points:
-        if not p.kapsam_dogrulandi:
+        if not (p.kapsam_dogrulandi or p.alan_dogrulandi):
             continue
-        d = alan_dokumu(p).get(alan_kodu)
+        d = alan_dokumu(p, turetilmis=True).get(alan_kodu)
         if d is None or d["dogrudan"] <= 0:
             continue
         olcekli = d["dogrudan"] * (target_capacity_tpd / p.capacity_tpd) ** exponent * duzeltme_carpani
         refs.append({
             "project": p.project, "capacity_tpd": p.capacity_tpd, "base_year": p.base_year,
             "reference_direct_usd": d["dogrudan"], "scaled_usd": round(olcekli, 0),
+            "proses": p.proses,
             "rapor_adlari": d["rapor_adlari"],
         })
     degerler = [r["scaled_usd"] for r in refs]
@@ -546,6 +627,16 @@ if __name__ == "__main__":
         sum(v["gider_payi"] for v in fd.values())))
     assert sum(v["dogrudan"] for v in fd.values()) == 410e6
     assert sum(v["gider_payi"] for v in fd.values()) == 121e6
+    cb = CERRO_BLANCO_DATA_POINT
+    cb_toplam = sum(a.dogrudan_usd for a in cb.alanlar)
+    print(f"Cerro Blanco alanları toplamı: {cb_toplam:,.0f} (rapor WBS 600: 136.9 milyon); durum: {cb.durum}")
+    assert abs(cb_toplam - 136.9e6) <= 0.2e6 and cb.alan_dogrulandi and not cb.kapsam_dogrulandi
+    assert cb.capex_seviye("A") is None
+    assert all(p.project != cb.project for p in dogrulanmis_noktalar(seviye="A"))
+    ko = estimate_area_capex("kirma_ogutme", 11747)
+    print("  kirma_ogutme @11,747 tpd: " + ", ".join(f"{r['project']} {r['scaled_usd']:,.0f}" for r in ko["referanslar"]))
+    assert {r["project"] for r in ko["referanslar"]} == {"Altar Project", "Furnas Project", "Cerro Blanco Project"}
+    print("  cil @11,747 tpd:", [(r['project'], r['scaled_usd']) for r in estimate_area_capex("cil", 11747)["referanslar"]])
     for kod in ("kirma", "ogutme", "flotasyon", "heap_leach"):
         e = estimate_area_capex(kod, 30000)
         print(f"  Alan {kod} @30,000 tpd: " + (", ".join(f"{r['project']} {r['scaled_usd']:,.0f}" for r in e["referanslar"]) or "VERİ YOK"))
