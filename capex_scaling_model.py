@@ -34,6 +34,7 @@ from typing import List, Optional
 
 # Kalem kategorileri
 EKIPMAN = "ekipman"
+DOGRUDAN = "dogrudan"      # ekipman + montaj birleşik verilmişse (ör. Furnas)
 MONTAJ = "montaj"
 SAHA = "saha_tesisleri"
 DOLAYLI = "dolayli"
@@ -47,16 +48,21 @@ KAPSAM_SEVIYELERI = {
     "D": "D - C + raporun gider payı (işletme sermayesi hariç)",
 }
 _SEVIYE_KATEGORILERI = {
-    "A": {EKIPMAN, MONTAJ},
-    "B": {EKIPMAN, MONTAJ, SAHA},
-    "C": {EKIPMAN, MONTAJ, SAHA, DOLAYLI},
-    "D": {EKIPMAN, MONTAJ, SAHA, DOLAYLI, GIDER_PAYI},
+    "A": {EKIPMAN, MONTAJ, DOGRUDAN},
+    "B": {EKIPMAN, MONTAJ, DOGRUDAN, SAHA},
+    "C": {EKIPMAN, MONTAJ, DOGRUDAN, SAHA, DOLAYLI},
+    "D": {EKIPMAN, MONTAJ, DOGRUDAN, SAHA, DOLAYLI, GIDER_PAYI},
 }
 VARSAYILAN_SEVIYE = "C"
 
 # Genel mühendislik kuralı (rapor verisi DEĞİL) - tek doğrulanmış nokta varken
 # kullanıcı üstel girmezse kullanılan literatür değeri
 LITERATUR_USTEL = 0.6
+
+# Veriden hesaplanan üstelin fiziksel olarak makul sayılacağı aralık. Bu aralığın
+# dışındaki sonuç (ör. negatif üstel) kapsam/yöntem farkını gösterir, ölçek etkisini
+# değil; kullanılmaz.
+USTEL_ARALIGI = (0.3, 1.0)
 
 
 @dataclass
@@ -87,6 +93,8 @@ class CapexDataPoint:
     kalemler: List[CapexKalem] = field(default_factory=list)
     source: str = ""
     notlar: str = ""
+    # Kalemlerden güvenilir biçimde hesaplanabilen kapsam seviyeleri
+    seviyeler: tuple = ("A", "B", "C", "D")
 
     @property
     def kapsam_dogrulandi(self) -> bool:
@@ -102,7 +110,7 @@ class CapexDataPoint:
 
     def capex_seviye(self, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
         """Kalemlerden istenen kapsam seviyesine göre CAPEX; döküm yoksa None."""
-        if not self.kapsam_dogrulandi:
+        if not self.kapsam_dogrulandi or seviye not in self.seviyeler:
             return None
         kat = _SEVIYE_KATEGORILERI[seviye]
         return sum(k.usd for k in self.kalemler if k.kategori in kat)
@@ -158,7 +166,65 @@ LA_MINA_DATA_POINT = CapexDataPoint(
     notlar="Process Plant CAPEX kalem dökümü ve kapsamı bilinmiyor; hesaba katılmaz.",
 )
 
-ALL_DATA_POINTS = [ALTAR_DATA_POINT, LA_MINA_DATA_POINT]
+# ------------------------------------------------------------------
+# Furnas - Tablo 21-8 / 21-9 (Forecast Process Initial Capital Cost Estimate), PEA
+# Ero Copper, rapor tarihi Mart 2026 (yürürlük 23 Şubat 2026)
+# ------------------------------------------------------------------
+_FURNAS_KAYNAK = "Furnas PEA (Ero Copper, Mart 2026), Tablo 21-9"
+FURNAS_DATA_POINT = CapexDataPoint(
+    project="Furnas Project",
+    capacity_tpd=37000,     # 13.5 Mtpa, rapor: ~37,000 t/g
+    base_year=2025,         # rapor, maliyetleri sabit 2025 2. çeyrek USD ile tahmin ettiğini belirtir
+    basslik_capex_usd=1_280_000_000,   # proje toplamı (madencilik, altyapı dahil) - hesaba katılmaz
+    kapsam=CapexKapsam(
+        tsf_dahil=False,            # "Tailings management" ($48M) ayrı satır
+        dis_altyapi_dahil=False,    # "Infrastructure" ($139M) ayrı satır
+        gider_payi_dahil=True,      # Tablo 21-9'da alan bazında gider payı var
+        dolayli_dahil=True,         # Tablo 21-9'da alan bazında dolaylı maliyet var
+        sahip_maliyeti_dahil=False, # "Owners' team" ($8M) ayrı satır
+    ),
+    kalemler=[
+        CapexKalem("Doğrudan maliyet (kırma, stok, öğütme, flotasyon, atık/macun koyulaştırma, "
+                   "konsantre koyulaştırma+filtrasyon, reaktif, elektrik-kontrol, tesis içi boru)",
+                   410_000_000, DOGRUDAN, _FURNAS_KAYNAK),
+        CapexKalem("Dolaylı maliyet (process plant)", 109_000_000, DOLAYLI, _FURNAS_KAYNAK),
+        CapexKalem("Gider payı (process plant)", 121_000_000, GIDER_PAYI, _FURNAS_KAYNAK),
+    ],
+    source="Furnas PEA, NI 43-101 teknik raporu (Mart 2026), Tablo 21-8/21-9; AACE Class 5 "
+           "(-%20/-%50 ile +%30/+%100)",
+    notlar=(
+        "Kalemler arama alıntısından (rapor metninin bir bölümü) okundu; alan bazlı satırların "
+        "toplamı raporun toplamıyla tutuyor (410 / 109 / 121 / 640 milyon USD, yuvarlama farkı 1). "
+        "Ekipman ve montaj ayrılmamış, 'doğrudan' tek kalem. Saha tesisleri (bina, tesis içi güç) "
+        "process plant tablosunda yok; 'Infrastructure' kaleminde ve ayrılamıyor, bu yüzden "
+        "yalnızca seviye A (doğrudan) Altar ile karşılaştırılabilir. Doğrudan maliyete "
+        "$94M'lik 'slimes & paste thickening (tailings)' alanı dahildir; atık koyulaştırma/macun "
+        "tesisi sınırımızın dışında sayılırsa doğrudan maliyet yaklaşık $316M olur."
+    ),
+    seviyeler=("A",),
+)
+
+ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, LA_MINA_DATA_POINT]
+
+
+def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
+    """
+    Kalemlerden öğrenilen oranlar (kullanıcının dolaylı maliyet ve gider payı
+    girdilerini seçerken referans alması için):
+      dolayli_pct: dolaylı maliyet / (doğrudan + saha tesisleri)
+      gider_payi_pct: gider payı / (doğrudan + saha tesisleri + dolaylı)
+    İşletme sermayesi paydaya girmez. Kalem dökümü yoksa None.
+    """
+    if not p.kapsam_dogrulandi:
+        return None
+    topla = lambda kats: sum(k.usd for k in p.kalemler if k.kategori in kats)
+    dogrudan = topla({EKIPMAN, MONTAJ, DOGRUDAN, SAHA})
+    dolayli = topla({DOLAYLI})
+    gider = topla({GIDER_PAYI})
+    if dogrudan <= 0 or dolayli <= 0:
+        return None
+    return {"dolayli_pct": 100 * dolayli / dogrudan,
+            "gider_payi_pct": 100 * gider / (dogrudan + dolayli)}
 
 
 def dogrulanmis_noktalar(points=None, seviye: str = VARSAYILAN_SEVIYE) -> list:
@@ -166,11 +232,8 @@ def dogrulanmis_noktalar(points=None, seviye: str = VARSAYILAN_SEVIYE) -> list:
     return [p for p in points if p.capex_seviye(seviye) is not None]
 
 
-def fit_scaling_exponent(points=None, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
-    """
-    Doğrulanmış noktalardan ln-ln en küçük kareler ile üstel (n) hesaplar.
-    En az 2 farklı kapasitede doğrulanmış nokta yoksa None döner.
-    """
+def fit_ham_ustel(points=None, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
+    """Doğrulanmış noktalardan ln-ln en küçük kareler üsteli (aralık denetimi YOK)."""
     pts = dogrulanmis_noktalar(points, seviye)
     if len({p.capacity_tpd for p in pts}) < 2:
         return None
@@ -178,6 +241,17 @@ def fit_scaling_exponent(points=None, seviye: str = VARSAYILAN_SEVIYE) -> Option
     ys = [math.log(p.capex_seviye(seviye)) for p in pts]
     xm, ym = sum(xs) / len(xs), sum(ys) / len(ys)
     return sum((x - xm) * (y - ym) for x, y in zip(xs, ys)) / sum((x - xm) ** 2 for x in xs)
+
+
+def fit_scaling_exponent(points=None, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
+    """
+    Üstel (n) yalnızca >=2 farklı kapasitede doğrulanmış nokta varsa VE sonuç fiziksel
+    aralıkta (USTEL_ARALIGI) ise döner; aksi halde None (aralık dışı üstel kullanılmaz).
+    """
+    n = fit_ham_ustel(points, seviye)
+    if n is None or not (USTEL_ARALIGI[0] <= n <= USTEL_ARALIGI[1]):
+        return None
+    return n
 
 
 def estimate_process_capex(
@@ -212,6 +286,7 @@ def estimate_process_capex(
         n, n_kaynak = exponent, "kullanıcı girdisi"
     else:
         fitted = fit_scaling_exponent(points, seviye)
+        ham = fit_ham_ustel(points, seviye)
         if fitted is not None:
             n, n_kaynak = fitted, f"{len(pts)} doğrulanmış noktadan hesaplandı"
         else:
@@ -225,7 +300,25 @@ def estimate_process_capex(
 
     kapasiteler = [p.capacity_tpd for p in pts]
     disarida = not (min(kapasiteler) <= target_capacity_tpd <= max(kapasiteler))
-    if len(set(kapasiteler)) == 1:
+
+    # Her doğrulanmış referanstan ayrı tahmin (aynı n, aynı düzeltme): referanslar
+    # birbirinden çok farklı çıkıyorsa kullanıcı bunu görmeli.
+    referans_tahminleri = []
+    for p in pts:
+        c = p.capex_seviye(seviye)
+        t = c * (target_capacity_tpd / p.capacity_tpd) ** n * duzeltme_carpani
+        referans_tahminleri.append({
+            "project": p.project, "capacity_tpd": p.capacity_tpd, "base_year": p.base_year,
+            "reference_capex_usd": c, "scaled_capex_usd": round(t, 0),
+        })
+    degerler = [r["scaled_capex_usd"] for r in referans_tahminleri]
+    yayilim = (max(degerler) / min(degerler)) if len(degerler) > 1 and min(degerler) > 0 else 1.0
+
+    if exponent is None and ham is not None and fitted is None:
+        uyari = (f"Veriden hesaplanan üstel ({ham:.2f}) fiziksel aralığın "
+                 f"({USTEL_ARALIGI[0]}-{USTEL_ARALIGI[1]}) dışında, kullanılmadı: referans noktalar "
+                 f"kapsam/yöntem farkı nedeniyle birbiriyle tutarlı değil. n={n} kullanıldı.")
+    elif len(set(kapasiteler)) == 1:
         uyari = (f"Tek doğrulanmış veri noktası var ({ref.project}, "
                  f"{ref.capacity_tpd:,.0f} tpd): ölçekleme üsteli veriden doğrulanamaz.")
     elif disarida:
@@ -233,6 +326,10 @@ def estimate_process_capex(
                  f"({min(kapasiteler):,.0f}-{max(kapasiteler):,.0f} tpd) dışında: ekstrapolasyon.")
     else:
         uyari = None
+    if yayilim > 1.3:
+        ek = (f"Doğrulanmış referanslardan yapılan tahminler arasında {yayilim:.1f} kat fark var "
+              f"(ölçekleme dışındaki nedenler: bölge, çalışma sınıfı, kapsam).")
+        uyari = ek if uyari is None else uyari + " " + ek
 
     return {
         "target_capacity_tpd": target_capacity_tpd,
@@ -249,6 +346,8 @@ def estimate_process_capex(
         "owner_costs_usd": round(sahip_maliyeti_usd, 0),
         "estimated_process_capex_usd": round(toplam, 0),
         "extrapolating": disarida or len(set(kapasiteler)) == 1,
+        "referans_tahminleri": referans_tahminleri,
+        "referans_yayilimi": round(yayilim, 2),
         "warning": uyari,
         "note": (
             f"Tahmin, {ref.project} verisinden ({ref.base_year} USD baz, kapsam seviyesi {seviye}) "
@@ -269,11 +368,29 @@ if __name__ == "__main__":
         print(f"  Seviye {s}: {a.capex_seviye(s):,.0f} USD  ({ad})")
     print(f"  Başlık rakamı (hesaba katılmaz): {a.basslik_capex_usd:,.0f}; "
           f"Tablo 21-5 ile fark: {a.basslik_capex_usd - 521_897_916:,.0f}")
+    for _p in (ALTAR_DATA_POINT, FURNAS_DATA_POINT):
+        print(f"  Oranlar {_p.project}: {kapsam_oranlari(_p)}")
     print(f"La Mina durum: {LA_MINA_DATA_POINT.durum}; seviye C = {LA_MINA_DATA_POINT.capex_seviye('C')}")
-    print(f"Veriden üstel: {fit_scaling_exponent()} (2. doğrulanmış nokta yok -> None beklenir)")
 
-    r = estimate_process_capex(30000)
-    print(f"\n30,000 tpd (seviye C): {r['estimated_process_capex_usd']:,.0f} USD, n={r['scaling_exponent']} ({r['exponent_source']})")
-    print(r["warning"])
+    f = FURNAS_DATA_POINT
+    f_toplam = sum(k.usd for k in f.kalemler)
+    print(f"\nFurnas kalemleri toplamı: {f_toplam:,.0f} (rapor Tablo 21-9: 640 milyon)")
+    assert abs(f_toplam - 640_000_000) <= 1_000_000
+    print(f"  Seviye A (doğrudan): {f.capex_seviye('A'):,.0f}; seviye C = {f.capex_seviye('C')} (saha tesisleri ayrılamıyor)")
+    assert f.capex_seviye("A") == 410_000_000 and f.capex_seviye("C") is None
+
+    ham = fit_ham_ustel(seviye="A")
+    print(f"\nSeviye A, iki doğrulanmış nokta (Altar + Furnas): ham üstel = {ham:.2f}; "
+          f"kullanılabilir mi: {fit_scaling_exponent(seviye='A') is not None}")
+    assert ham < 0 and fit_scaling_exponent(seviye="A") is None
+    print(f"Seviye C, doğrulanmış nokta sayısı: {len(dogrulanmis_noktalar(seviye='C'))} -> üstel {fit_scaling_exponent()}")
+
+    for sv in ("A", "C"):
+        r = estimate_process_capex(30000, seviye=sv)
+        print(f"\n30,000 tpd (seviye {sv}): {r['estimated_process_capex_usd']:,.0f} USD, "
+              f"n={r['scaling_exponent']} ({r['exponent_source']}), referans={r['reference_project']}")
+        for t in r["referans_tahminleri"]:
+            print(f"    {t['project']}: {t['scaled_capex_usd']:,.0f}")
+        print("  UYARI:", r["warning"])
     r2 = estimate_process_capex(30000, seviye="D", duzeltme_carpani=1.1)
-    print(f"30,000 tpd (seviye D, x1.10): {r2['estimated_process_capex_usd']:,.0f} USD")
+    print(f"\n30,000 tpd (seviye D, x1.10): {r2['estimated_process_capex_usd']:,.0f} USD")

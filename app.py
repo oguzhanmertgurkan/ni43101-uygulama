@@ -35,6 +35,9 @@ from capex_scaling_model import (
     ALL_DATA_POINTS,
     ALTAR_DATA_POINT,
     KAPSAM_SEVIYELERI,
+    kapsam_oranlari,
+    fit_ham_ustel,
+    USTEL_ARALIGI,
     VARSAYILAN_SEVIYE,
     LITERATUR_USTEL,
 )
@@ -305,14 +308,24 @@ with tab3:
         "\"Belirsiz\" işaretlenir; üssel hesabına ve tahmine girmez, grafikte ayrı renkle gösterilir."
     )
 
-    with st.expander("Altar PEA - Tablo 21-5 kalem kalem döküm ve notlar"):
-        kalem_df = pd.DataFrame([
-            {"Kalem": kl.ad, "Tutar (USD)": f"{kl.usd:,.0f}", "Kategori": kl.kategori}
-            for kl in ALTAR_DATA_POINT.kalemler
-        ])
-        st.dataframe(kalem_df, hide_index=True, use_container_width=True)
-        st.caption(ALTAR_DATA_POINT.source.replace("$", "\\$"))
-        st.caption(ALTAR_DATA_POINT.notlar.replace("$", "\\$"))
+    for p in ALL_DATA_POINTS:
+        if not p.kalemler:
+            continue
+        with st.expander(f"{p.project} - kalem kalem döküm ve notlar"):
+            kalem_df = pd.DataFrame([
+                {"Kalem": kl.ad, "Tutar (USD)": f"{kl.usd:,.0f}", "Kategori": kl.kategori}
+                for kl in p.kalemler
+            ])
+            st.dataframe(kalem_df, hide_index=True, use_container_width=True)
+            st.caption(p.source.replace("$", "\\$"))
+            st.caption(p.notlar.replace("$", "\\$"))
+            oran = kapsam_oranlari(p)
+            if oran:
+                st.caption(
+                    f"Bu rapordan öğrenilen oranlar: dolaylı maliyet = doğrudan+saha tesisleri tutarının "
+                    f"%{oran['dolayli_pct']:.1f}'i; gider payı = (doğrudan+saha+dolaylı) tutarının "
+                    f"%{oran['gider_payi_pct']:.1f}'i."
+                )
 
     # --- Kullanıcı girdileri ---
     st.subheader("Tahmin")
@@ -327,6 +340,13 @@ with tab3:
                 help="Birden fazla doğrulanmış veri noktası olmadığından üstel veriden hesaplanamıyor. "
                      "Varsayılan 0.6 genel literatür kuralıdır, bu projenin verisi değildir.",
             )
+            ham_n = fit_ham_ustel(seviye=seviye)
+            if ham_n is not None:
+                st.warning(
+                    f"Doğrulanmış noktalardan hesaplanan üstel {ham_n:.2f}, fiziksel aralığın "
+                    f"({USTEL_ARALIGI[0]}-{USTEL_ARALIGI[1]}) dışında olduğu için kullanılmadı: noktalar "
+                    f"kapsam, bölge veya çalışma sınıfı farkı yüzünden birbiriyle tutarlı değil."
+                )
         else:
             n_girdi = None
             st.info(f"Doğrulanmış noktalardan hesaplanan üstel: **n = {ust_veri:.4f}**")
@@ -360,6 +380,14 @@ with tab3:
     if sonuc["warning"]:
         st.warning(sonuc["warning"].replace("$", "\\$"))
     st.caption(sonuc["note"].replace("$", "\\$"))
+    if len(sonuc["referans_tahminleri"]) > 1:
+        st.markdown("**Doğrulanmış referanslardan ayrı ayrı tahmin** (aynı n ve düzeltme çarpanıyla)")
+        st.dataframe(pd.DataFrame([
+            {"Referans": t["project"], "Referans kapasite (tpd)": f"{t['capacity_tpd']:,.0f}",
+             "Baz yılı": t["base_year"], f"Referans CAPEX (seviye {seviye})": f"${t['reference_capex_usd']:,.0f}",
+             "Hedef için tahmin": f"${t['scaled_capex_usd']:,.0f}"}
+            for t in sonuc["referans_tahminleri"]
+        ]), hide_index=True, use_container_width=True)
 
     # --- Grafik: ölçekleme eğrisi + veri noktaları (kapsam durumuna göre renk) ---
     kapasiteler = list(range(5000, 150001, 5000))
@@ -380,10 +408,11 @@ with tab3:
             nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                "CAPEX (USD)": cs * duzeltme,
                                "Durum": f"Doğrulanmış (seviye {seviye})"})
-        else:
+        elif not p.kapsam_dogrulandi:
             nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                "CAPEX (USD)": p.basslik_capex_usd,
                                "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
+        # kapsamı doğrulanmış ama bu seviyede hesaplanamayan nokta grafiğe konmaz
     # Altar başlık rakamı da kalem dökümüyle uyuşmadığı için ayrı gösterilir
     nokta_rows.append({"Proje": "Altar (başlık rakamı)", "Kapasite (tpd)": ALTAR_DATA_POINT.capacity_tpd,
                        "CAPEX (USD)": ALTAR_DATA_POINT.basslik_capex_usd,
