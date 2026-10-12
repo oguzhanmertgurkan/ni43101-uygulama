@@ -509,8 +509,10 @@ with tab3:
             st.warning("Bu alanlar için henüz doğrulanmış rapor verisi yok, toplama girmedi: " + ", ".join(eksik))
         st.caption(
             "Referanslar farklı kapsam, bölge ve çalışma sınıfı taşıdığı için iki uç arasındaki fark ölçek etkisi "
-            "değildir. Altar değerleri yalnızca ekipman satın alma + montajdır (saha tesisleri hariç); Furnas "
-            "değerleri raporun doğrudan maliyetidir (inşaat, boru ve elektrik dahil)."
+            "değildir. Altar değerleri yalnızca ekipman satın alma + montajdır (saha tesisleri hariç); Furnas, Cerro Blanco, "
+            "Enchi ve Cactus değerleri raporların doğrudan maliyetidir (inşaat, boru ve elektrik dahil; Enchi'de "
+            "gider payı bölüm bazında orantılı ayrıştırıldı). Kırma ve öğütmede en yüksek uç genellikle Furnas'tır "
+            "ve diğer referansların belirgin üstündedir."
         )
 
     # --- İşleme işletme gideri (OPEX) referansları ---
