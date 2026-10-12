@@ -38,6 +38,9 @@ from capex_scaling_model import (
     kapsam_oranlari,
     fit_ham_ustel,
     USTEL_ARALIGI,
+    ALAN_TURLERI,
+    estimate_area_capex,
+    alan_dokumu,
     VARSAYILAN_SEVIYE,
     LITERATUR_USTEL,
 )
@@ -433,6 +436,79 @@ with tab3:
         "Not: Veri noktaları farklı baz yıllarına ve farklı kapsamlara aittir. Çarpan, kullanıcı "
         "girdisidir. PEA tahminlerinin doğruluk sınıfı genellikle ±%50'dir."
     )
+
+    # ------------------------------------------------------------------
+    # Alan (unit operation) bazlı tahmin: kullanıcı rotasını seçer
+    # ------------------------------------------------------------------
+    st.divider()
+    st.subheader("Proses rotası: alan bazlı CAPEX tahmini")
+    st.markdown(
+        "Yukarıdaki tahmin tüm process plant içindir. Burada kendi rotanın alanlarını seçersin, "
+        "her alan için raporlardaki doğrudan maliyetten ayrı ayrı tahmin yapılır. Dolaylı maliyet "
+        "ve gider payı sana bırakılır (aşağıdaki oranlar raporlardan öğrenilmiştir). "
+        "Henüz rapor verisi olmayan alanlar 'veri yok' olarak görünür."
+    )
+    secenekler = list(ALAN_TURLERI.keys())
+    varsayilan_alanlar = ["kirma", "stok", "ogutme", "flotasyon", "konsantre_koyulastirma",
+                          "konsantre_filtrasyon", "atik_koyulastirma"]
+    secilen = st.multiselect(
+        "Rotanda bulunan alanlar", options=secenekler, default=varsayilan_alanlar,
+        format_func=lambda k: ALAN_TURLERI[k],
+    )
+    a1, a2, a3 = st.columns(3)
+    alan_n = a1.number_input("Alan ölçekleme üsteli (n)", min_value=0.3, max_value=1.0,
+                             value=LITERATUR_USTEL, step=0.01,
+                             help="Genel literatür değeri (veri değil). Alan başına doğrulanmış nokta sayısı "
+                                  "yetersiz olduğundan üstel veriden hesaplanmıyor.")
+    alan_dolayli = a2.number_input("Dolaylı maliyet (% doğrudan)", min_value=0.0, max_value=100.0,
+                                   value=0.0, step=1.0)
+    alan_gider = a3.number_input("Gider payı (% doğrudan+dolaylı)", min_value=0.0, max_value=100.0,
+                                 value=0.0, step=1.0)
+    ogrenilen = []
+    for p in ALL_DATA_POINTS:
+        oran = kapsam_oranlari(p)
+        if oran:
+            ogrenilen.append(f"{p.project}: dolaylı %{oran['dolayli_pct']:.1f}, gider payı %{oran['gider_payi_pct']:.1f}")
+    if ogrenilen:
+        st.caption("Raporlardan öğrenilen oranlar: " + " | ".join(ogrenilen))
+
+    satirlar = []
+    alt_toplam = ust_toplam = 0.0
+    eksik = []
+    for kod in secilen:
+        e = estimate_area_capex(kod, hedef_kapasite, exponent=alan_n, duzeltme_carpani=duzeltme)
+        if not e["veri_var"]:
+            eksik.append(ALAN_TURLERI[kod])
+            satirlar.append({"Alan": ALAN_TURLERI[kod], "Referans(lar)": "-", "En düşük": "veri yok",
+                             "En yüksek": "veri yok"})
+            continue
+        alt_toplam += e["min_usd"]
+        ust_toplam += e["max_usd"]
+        satirlar.append({
+            "Alan": ALAN_TURLERI[kod],
+            "Referans(lar)": ", ".join(f"{r['project']} (${r['scaled_usd'] / 1e6:,.1f}M)" for r in e["referanslar"]),
+            "En düşük": f"${e['min_usd']:,.0f}",
+            "En yüksek": f"${e['max_usd']:,.0f}",
+        })
+    if satirlar:
+        st.dataframe(pd.DataFrame(satirlar), hide_index=True, use_container_width=True)
+        carp = (1 + alan_dolayli / 100.0) * (1 + alan_gider / 100.0)
+        t1, t2 = st.columns(2)
+        t1.metric("Seçili alanlar, doğrudan (en düşük referans)", f"${alt_toplam:,.0f}")
+        t2.metric("Seçili alanlar, doğrudan (en yüksek referans)", f"${ust_toplam:,.0f}")
+        if alan_dolayli or alan_gider:
+            st.caption(
+                f"Dolaylı maliyet ve gider payı eklenmiş toplam: ${alt_toplam * carp:,.0f} - ${ust_toplam * carp:,.0f}"
+                .replace("$", "\\$")
+            )
+        if eksik:
+            st.warning("Bu alanlar için henüz doğrulanmış rapor verisi yok, toplama girmedi: " + ", ".join(eksik))
+        st.caption(
+            "Referanslar farklı kapsam, bölge ve çalışma sınıfı taşıdığı için iki uç arasındaki fark ölçek etkisi "
+            "değildir. Altar değerleri yalnızca ekipman satın alma + montajdır (saha tesisleri hariç); Furnas "
+            "değerleri raporun doğrudan maliyetidir (inşaat, boru ve elektrik dahil)."
+        )
+
 
 # ------------------------------------------------------------------
 # TAB 4: Boyut Küçültme (Kırma + Öğütme)

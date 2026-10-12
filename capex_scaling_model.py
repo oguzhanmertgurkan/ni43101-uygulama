@@ -84,6 +84,18 @@ class CapexKapsam:
 
 
 @dataclass
+class CapexAlan:
+    """Bir raporun tek bir proses alanı (unit operation) için maliyet satırı."""
+    alan_kodu: str          # ALAN_TURLERI anahtarı
+    rapor_adi: str          # raporun kendi alan adı
+    dogrudan_usd: float     # doğrudan maliyet (ekipman + montaj / raporun doğrudan maliyeti)
+    dolayli_usd: Optional[float] = None
+    gider_payi_usd: Optional[float] = None
+    kaynak: str = ""
+    not_: str = ""
+
+
+@dataclass
 class CapexDataPoint:
     project: str
     capacity_tpd: float
@@ -95,6 +107,8 @@ class CapexDataPoint:
     notlar: str = ""
     # Kalemlerden güvenilir biçimde hesaplanabilen kapsam seviyeleri
     seviyeler: tuple = ("A", "B", "C", "D")
+    # Alan (unit operation) bazlı döküm; yoksa boş
+    alanlar: list = field(default_factory=list)
 
     @property
     def kapsam_dogrulandi(self) -> bool:
@@ -203,6 +217,102 @@ FURNAS_DATA_POINT = CapexDataPoint(
     ),
     seviyeler=("A",),
 )
+
+# ------------------------------------------------------------------
+# PROSES ALANLARI (unit operation) - rota seçimi için standart alan kodları
+# ------------------------------------------------------------------
+# (kod, etiket, veri_var): veri_var=False olan alanlar için henüz doğrulanmış
+# rapor verisi yok; uygulamada "veri yok" olarak gösterilir.
+ALAN_TURLERI = {
+    "kirma": "Kırma",
+    "stok": "Kırılmış cevher stoku ve geri alma",
+    "ogutme": "Öğütme (SAG/bilyalı + siklon)",
+    "yeniden_ogutme": "Yeniden öğütme",
+    "flotasyon": "Flotasyon",
+    "konsantre_koyulastirma": "Konsantre koyulaştırma",
+    "konsantre_filtrasyon": "Konsantre filtrasyonu ve depolama",
+    "atik_koyulastirma": "Atık / macun koyulaştırma",
+    "reaktif": "Reaktif ve flokülant tesisi",
+    "elektrik_kontrol": "Elektrik ve kontrol",
+    "boru": "Tesis içi borulama",
+    "yardimci": "Pompa, konveyör ve diğer yardımcı (alanı belirsiz)",
+    # Aşağıdaki alanlar için henüz doğrulanmış rapor verisi yok
+    "heap_leach": "Heap leach (aglomerasyon, istif, pad)",
+    "sx_ew": "SX-EW",
+    "asit_tesisi": "Sülfürik asit tesisi",
+    "cil": "Siyanür liçi / CIL / CIP",
+    "adr": "ADR (karbon geri kazanım) ve rafineri",
+    "gravite": "Gravite ayırma (jig, spiral, masa, santrifüj)",
+    "dms": "Ağır ortam ayırma (DMS)",
+    "manyetik": "Manyetik / elektrostatik ayırma",
+}
+
+# Altar PEA, Şekil 21-1 (Summary of Process Equipment Supply and Installation).
+# (ekipman, boyut, adet, satın alma USD, montaj USD, alan). Alan ataması,
+# raporun tabloda alan başlığı vermemesi nedeniyle ekipman adı ve tablo sırasına
+# göre yapıldı (küçük pompa/konveyör satırları için yorum içerir).
+ALTAR_EKIPMAN_LISTESI = [
+    ("Gyratory Crusher", "60 x 110 inç", 2, 20_260_200, 24_930_383, "kirma"),
+    ("Crushed Ore Stockpile", "60,000 t", 1, 11_429_494, 13_050_721, "stok"),
+    ("SAG Mill Reclaim Conveyor", "", 1, 1_420_800, 2_189_453, "stok"),
+    ("SAG Mill & Motor", "12.1 x 7.9 m", 1, 23_102_300, 22_653_450, "ogutme"),
+    ("Pebble Screen", "", 4, 2_624_300, 2_584_936, "ogutme"),
+    ("Pebble Return Conveyor", "76,621 L/dk", 1, 99_200, 124_893, "ogutme"),
+    ("Ball Mill & Motor", "7.9 x 12.3 m", 1, 12_854_000, 13_282_200, "ogutme"),
+    ("Cyclone Feed Sump & Pump", "57,463 L/dk", 1, 99_200, 124_893, "ogutme"),
+    ("Cyclones", "76.2 cm", 36, 1_887_480, 2_891_619, "ogutme"),
+    ("Sump & Pump", "76,622 L/dk", 1, 99_200, 124_893, "ogutme"),
+    ("Regrind Mill (Tower Mill)", "183 cm yarıçap x 13.5 m", 5, 19_000_000, 19_500_000, "yeniden_ogutme"),
+    ("Concentrate Thickener", "20 m çap", 1, 437_400, 861_252, "konsantre_koyulastirma"),
+    ("Sump & Pump", "15 L/dk", 1, 17_500, 22_033, "konsantre_koyulastirma"),
+    ("Flotation Cells", "2,355 m3", 47, 12_026_370, 20_649_277, "flotasyon"),
+    ("Sump & Pump", "15 L/dk", 1, 17_500, 22_033, "flotasyon"),
+    ("Sump & Pump", "3 L/dk", 1, 17_500, 22_033, "flotasyon"),
+    ("Concentrate Filter Press", "37 m2", 2, 2_154_100, 2_304_193, "konsantre_filtrasyon"),
+    ("Cyclones", "10.2 cm", 6, 20_760, 31_804, "yardimci"),
+    ("Conveyor", "36 cm", 1, 39_400, 60_715, "yardimci"),
+    ("Sump & Pump", "76,606 L/dk", 1, 99_200, 124_893, "yardimci"),
+    ("Conveyor", "36 cm", 1, 39_400, 60_715, "yardimci"),
+    ("Tailing Thickener", "49 m çap", 1, 1_945_500, 4_474_650, "atik_koyulastirma"),
+    ("Sump & Pump", "76,606 L/dk", 1, 99_200, 124_893, "yardimci"),
+]
+
+
+def _altar_alanlari() -> list:
+    toplam = {}
+    adlar = {}
+    for ad, _boyut, _adet, alis, montaj, alan in ALTAR_EKIPMAN_LISTESI:
+        toplam[alan] = toplam.get(alan, 0) + alis + montaj
+        adlar.setdefault(alan, []).append(ad)
+    return [
+        CapexAlan(alan, ", ".join(dict.fromkeys(adlar[alan])), v,
+                  kaynak="Altar PEA, Şekil 21-1 (ekipman satın alma + montaj)")
+        for alan, v in toplam.items()
+    ]
+
+
+ALTAR_DATA_POINT.alanlar = _altar_alanlari()
+
+# Furnas - Tablo 21-8 (doğrudan) ve 21-9 (maliyet tahsisi): alan bazlı
+# (rapor alanı, alan_kodu, doğrudan, dolaylı, gider payı), milyon USD
+_FURNAS_ALANLAR_MUSD = [
+    ("Crushing plant", "kirma", 85, 21, 16),
+    ("Stockpile", "stok", 4, 1, 2),
+    ("Grinding", "ogutme", 108, 27, 38),
+    ("Flotation", "flotasyon", 44, 11, 12),
+    ("Slimes & paste thickening (tailings)", "atik_koyulastirma", 94, 23, 22),
+    ("Concentrate thickening", "konsantre_koyulastirma", 2, 0, 1),
+    ("Concentrate filtration and storage", "konsantre_filtrasyon", 32, 8, 10),
+    ("Reagent plant and flocculant", "reaktif", 14, 4, 6),
+    ("Electricity and control", "elektrik_kontrol", 19, 10, 10),
+    ("Piping in-plant", "boru", 8, 3, 4),
+]
+FURNAS_DATA_POINT.alanlar = [
+    CapexAlan(kod, ad, d * 1e6, di * 1e6, g * 1e6,
+              kaynak="Furnas PEA, Tablo 21-8 / 21-9",
+              not_="Milyon USD olarak yuvarlanmış değer")
+    for ad, kod, d, di, g in _FURNAS_ALANLAR_MUSD
+]
 
 ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, LA_MINA_DATA_POINT]
 
@@ -357,6 +467,62 @@ def estimate_process_capex(
     }
 
 
+def alan_dokumu(p: CapexDataPoint) -> dict:
+    """Bir veri noktasının alanlarını alan_kodu'na göre toplar (doğrudan, dolaylı, gider payı)."""
+    out = {}
+    for a in p.alanlar:
+        d = out.setdefault(a.alan_kodu, {"dogrudan": 0.0, "dolayli": 0.0, "gider_payi": 0.0,
+                                         "dolayli_var": True, "gider_payi_var": True, "rapor_adlari": []})
+        d["dogrudan"] += a.dogrudan_usd
+        if a.dolayli_usd is None:
+            d["dolayli_var"] = False
+        else:
+            d["dolayli"] += a.dolayli_usd
+        if a.gider_payi_usd is None:
+            d["gider_payi_var"] = False
+        else:
+            d["gider_payi"] += a.gider_payi_usd
+        d["rapor_adlari"].append(a.rapor_adi)
+    return out
+
+
+def estimate_area_capex(
+    alan_kodu: str,
+    target_capacity_tpd: float,
+    exponent: float = LITERATUR_USTEL,
+    duzeltme_carpani: float = 1.0,
+    points=None,
+) -> dict:
+    """
+    Tek bir proses alanının DOĞRUDAN maliyetini, o alan için verisi olan her
+    doğrulanmış referanstan (kapsamı doğrulanmış nokta) ayrı ayrı ölçekler.
+    Dolaylı maliyet ve gider payı buraya karışmaz (kullanıcı ekler).
+    Veri yoksa referanslar boştur.
+    """
+    points = ALL_DATA_POINTS if points is None else points
+    refs = []
+    for p in points:
+        if not p.kapsam_dogrulandi:
+            continue
+        d = alan_dokumu(p).get(alan_kodu)
+        if d is None or d["dogrudan"] <= 0:
+            continue
+        olcekli = d["dogrudan"] * (target_capacity_tpd / p.capacity_tpd) ** exponent * duzeltme_carpani
+        refs.append({
+            "project": p.project, "capacity_tpd": p.capacity_tpd, "base_year": p.base_year,
+            "reference_direct_usd": d["dogrudan"], "scaled_usd": round(olcekli, 0),
+            "rapor_adlari": d["rapor_adlari"],
+        })
+    degerler = [r["scaled_usd"] for r in refs]
+    return {
+        "alan_kodu": alan_kodu, "etiket": ALAN_TURLERI.get(alan_kodu, alan_kodu),
+        "referanslar": refs, "veri_var": bool(refs),
+        "min_usd": min(degerler) if degerler else None,
+        "max_usd": max(degerler) if degerler else None,
+        "exponent": exponent,
+    }
+
+
 if __name__ == "__main__":
     print("CAPEX Ölçekleme Modeli - Doğrulama\n" + "-" * 55)
     a = ALTAR_DATA_POINT
@@ -368,6 +534,21 @@ if __name__ == "__main__":
         print(f"  Seviye {s}: {a.capex_seviye(s):,.0f} USD  ({ad})")
     print(f"  Başlık rakamı (hesaba katılmaz): {a.basslik_capex_usd:,.0f}; "
           f"Tablo 21-5 ile fark: {a.basslik_capex_usd - 521_897_916:,.0f}")
+    # Altar ekipman listesi toplamları (Şekil 21-1)
+    alis = sum(i[3] for i in ALTAR_EKIPMAN_LISTESI)
+    montaj = sum(i[4] for i in ALTAR_EKIPMAN_LISTESI)
+    print(f"Altar ekipman listesi: satın alma {alis:,.0f}, montaj {montaj:,.0f} (rapor: 109,790,004 / 130,215,932)")
+    assert alis == 109_790_004 and montaj == 130_215_932
+    assert abs(sum(a.dogrudan_usd for a in ALTAR_DATA_POINT.alanlar) - (alis + montaj)) < 1
+    fd = alan_dokumu(FURNAS_DATA_POINT)
+    print("Furnas alanları toplamı: doğrudan %.0f, dolaylı %.0f, gider payı %.0f (rapor: 410 / 109 / 121 milyon)" % (
+        sum(v["dogrudan"] for v in fd.values()), sum(v["dolayli"] for v in fd.values()),
+        sum(v["gider_payi"] for v in fd.values())))
+    assert sum(v["dogrudan"] for v in fd.values()) == 410e6
+    assert sum(v["gider_payi"] for v in fd.values()) == 121e6
+    for kod in ("kirma", "ogutme", "flotasyon", "heap_leach"):
+        e = estimate_area_capex(kod, 30000)
+        print(f"  Alan {kod} @30,000 tpd: " + (", ".join(f"{r['project']} {r['scaled_usd']:,.0f}" for r in e["referanslar"]) or "VERİ YOK"))
     for _p in (ALTAR_DATA_POINT, FURNAS_DATA_POINT):
         print(f"  Oranlar {_p.project}: {kapsam_oranlari(_p)}")
     print(f"La Mina durum: {LA_MINA_DATA_POINT.durum}; seviye C = {LA_MINA_DATA_POINT.capex_seviye('C')}")
