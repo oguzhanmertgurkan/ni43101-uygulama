@@ -257,6 +257,7 @@ ALAN_TURLERI = {
     "heap_leach": "Heap leach (aglomerasyon, istif, pad)",
     "sx_ew": "SX-EW",
     "asit_tesisi": "Sülfürik asit tesisi",
+    "on_koyulastirma": "Liç öncesi koyulaştırma ve kaba ayıklama (trash screen)",
     "cil": "Siyanür liçi, CIP/CIL ve detoks",
     "adr": "ADR (karbon geri kazanım) ve rafineri",
     "gravite": "Gravite ayırma (jig, spiral, masa, santrifüj)",
@@ -383,7 +384,122 @@ CERRO_BLANCO_DATA_POINT = CapexDataPoint(
     opex_kirilim={"İşçilik": 0.71, "Güç": 5.11, "Bakım ve sarf": 3.60, "Reaktif": 3.41, "Diğer": 0.09},
 )
 
-ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, LA_MINA_DATA_POINT]
+# ------------------------------------------------------------------
+# Enchi Gold Project - Tablo 21.2.1 ve 21.3.2 / 21.3.3, PFS, Lycopodium, Ağustos 2026
+# Altın: kırma/boyutlandırma, SAG+bilyalı (SAB), gravite, liç öncesi koyulaştırma, CIL, elüsyon. Flotasyon YOK.
+# Rapor alan tablolarındaki tutarlar tahsis edilmiş proje gider payını (contingency) İÇERİR.
+# Gider payı, Tablo 21.2.1'deki bölüm toplamlarından (gider payı hariç) bölüm bazında orantılı ayrıştırıldı.
+# ------------------------------------------------------------------
+_EN_KAYNAK = "Enchi PFS (Lycopodium, Ağustos 2026), Tablo 21.3.2 / 21.3.3 ve Tablo 21.2.1"
+_EN_TESIS_ORAN = 113.5 / 127.3   # Tablo 21.2.1 (gider payı hariç) / Tablo 21.3.2 (gider payı dahil)
+_EN_REAKTIF_ORAN = 18.7 / 21.1   # Tablo 21.2.1 / Tablo 21.3.3
+_EN_ALANLAR_MUSD = [
+    # (alan_kodu, rapor_adi, gider payı dahil MUSD, bölüm oranı, not)
+    ("kirma", "120 Feed Preparation", 18.2, _EN_TESIS_ORAN,
+     "Mineral sizer (oksit) ve çeneli kırıcı (sert cevher), ROM bunkerleri, konveyörler"),
+    ("ogutme", "130 Milling", 51.9, _EN_TESIS_ORAN,
+     "SAG + bilyalı değirmen + siklon; gravite devresinin bu kalemde mi 160/170'te mi olduğu raporda ayrılmamış"),
+    ("on_koyulastirma", "140 Trash Removal and Thickening", 5.2, _EN_TESIS_ORAN, ""),
+    ("cil", "160 Leaching", 25.1, _EN_TESIS_ORAN, "7 tanklı tek hat CIL"),
+    ("adr", "170 Elution and Gold Room", 11.1, _EN_TESIS_ORAN, "Split-AARL elüsyon, EW, ergitme"),
+    ("reaktif", "210 Reagents", 2.4, _EN_REAKTIF_ORAN, ""),
+    ("elektrik_kontrol", "260 Electrical Services", 7.9, _EN_REAKTIF_ORAN, ""),
+    ("yardimci", "110 Treatment Plant General + 180 Tails Handling + 220 Water + 230 Plant Services + 240 Air",
+     14.5 + 1.4 + 6.3 + 0.4 + 4.1, None,
+     "Karışık: 110 ve 180 tesis oranı, 220-240 reaktif/hizmet oranı ile ayrıştırıldı"),
+]
+
+
+def _en_alan(kod, ad, toplam, oran, not_):
+    if oran is None:
+        dogrudan = (14.5 + 1.4) * _EN_TESIS_ORAN + (6.3 + 0.4 + 4.1) * _EN_REAKTIF_ORAN
+    else:
+        dogrudan = toplam * oran
+    return CapexAlan(kod, ad, round(dogrudan * 1e6), gider_payi_usd=round((toplam - dogrudan) * 1e6),
+                     kaynak=_EN_KAYNAK, not_=not_)
+
+
+ENCHI_DATA_POINT = CapexDataPoint(
+    project="Enchi Gold Project",
+    capacity_tpd=round(5_500_000 / 365),   # 5.5 Mtpa nominal, 15,068 t/gün
+    base_year=2026,                         # rapor: Q1 2026 fiyatları, -%20/+%30
+    basslik_capex_usd=351_200_000,          # başlangıç yatırımı (madencilik, TSF, EPCM, sahip dahil)
+    kapsam=CapexKapsam(
+        tsf_dahil=False,             # baraj (Alan 350) alan tablolarında yok
+        dis_altyapi_dahil=False,     # Alan 300 ayrı
+        gider_payi_dahil=False,      # alan tutarlarından ayrıştırıldı (orantılı)
+        dolayli_dahil=False,         # EPCM (Alan 500) ayrı
+        sahip_maliyeti_dahil=False,  # Alan 600 ayrı
+    ),
+    alanlar=[_en_alan(*a) for a in _EN_ALANLAR_MUSD],
+    source="Enchi Gold Project PFS, N.I. 43-101 Teknik Rapor (Lycopodium, Ağustos 2026); "
+           "doğruluk -%20/+%30; Q1 2026 fiyatları; USD",
+    notlar=(
+        "Alan tabloları (21.3.2, 21.3.3) 'allocated project contingency' içerir. Tablo 21.2.1'deki gider payı hariç "
+        "bölüm toplamları (tesis 113.5, reaktif ve hizmetler 18.7) ile bölüm bazında oranlanıp (gider payı ayrı "
+        "tutularak) doğrudan değere çevrildi; alan başına gider payı oranının eşit olduğu varsayımı yaklaşıktır. "
+        "Alanlara DAHİL DEĞİL: inşaat dağıtımları ($34.3M), tesis binaları (370, $4.9M), TSF, EPCM ($38.6M), "
+        "sahip maliyetleri ($37.4M), madencilik. Kapasite 5.5 Mtpa / 365 = 15,068 t/gün (nominal)."
+    ),
+    seviyeler=(),
+    proses="Au siyanürleme (CIL) - flotasyon yok",
+    isleme_opex_usd_t=12.61,
+)
+
+# ------------------------------------------------------------------
+# Cactus Mine Project - Tablo 21-3 (Process Plant Direct Capital, initial), PFS, M3 Engineering, 17 Kasım 2025
+# Cu yığın liçi (heap leach) + SX-EW. Kısa ton (st) ve USD. Flotasyon YOK.
+# Tablo 21-3 'Direct Infrastructure Cost Excluded' başlığını taşır: altyapı (Tablo 21-4), dolaylı (21-5),
+# gider payı (21-6) ve sahip maliyeti ayrı. Madencilik alanlara dahil değil.
+# ------------------------------------------------------------------
+_ST_T = 0.90718474   # 1 kısa ton = 0.9072 metrik ton
+_CA_KAYNAK = "Cactus PFS (M3 Engineering, 17 Kasım 2025), Tablo 21-3 (initial)"
+_CA_ALANLAR_KUSD = [
+    # (alan_kodu, rapor_adi, kUSD, not)
+    ("kirma", "Primary Crusher + Primary Crusher Discharge Conveyor + Secondary Screening + Secondary Crushing + "
+              "Crushing Control Room", 15_398 + 3_770 + 21_649 + 28_826 + 645,
+     "Rapor iki kademeli kırma diyor; kırma kontrol odası dahil"),
+    ("stok", "Reclaim", 7_083, "Kırılmış cevher geri alma"),
+    ("heap_leach", "Leach Pad + Solution Collection + Leach Pad Piping & Stacking",
+     60_526 + 15_113 + 29_122, "Yığın liçi tesisi (HLF): pad, solüsyon toplama, borulama ve istif"),
+    ("sx_ew", "SX & Raffinate + SX Tank Farm + Electrowinning + SX/EW Control Room",
+     38_008 + 41_852 + 53_672 + 931, "SX, tank çiftliği ve EW birlikte; raporda ayrı SX ve EW kalemleri var"),
+    ("reaktif", "SX/EW Reagents + Sulfuric Acid", 887 + 2_935,
+     "Sülfürik asit satın alınıyor; kalem asit depolama/dağıtım, asit üretim tesisi DEĞİL"),
+    ("yardimci", "Loadout + Process Maintenance Building + Well Fields", 4_878 + 1_896 + 586, ""),
+]
+CACTUS_DATA_POINT = CapexDataPoint(
+    project="Cactus Mine Project",
+    capacity_tpd=round(76_713 * _ST_T),    # 76,713 st/gün (28 Mst/yıl yığına) -> metrik t/gün
+    base_year=2025,                         # rapor: 2025 3. çeyrek maliyetleri, -%20/+%20
+    basslik_capex_usd=976_977_000,          # başlangıç yatırımı, gider payı dahil (madencilik, altyapı, sahip dahil)
+    kapsam=CapexKapsam(
+        tsf_dahil=False,             # yığın liçi pad'i proses alanı olarak dahil; atık barajı bu rapor türünde yok
+        dis_altyapi_dahil=False,     # Tablo 21-4 (123.4M$) ayrı
+        gider_payi_dahil=False,      # Tablo 21-6 ayrı (plant+altyapı %18)
+        dolayli_dahil=False,         # Tablo 21-5 ayrı (EPCM, nakliye, geçici tesisler vb.)
+        sahip_maliyeti_dahil=False,  # sahip maliyetleri ayrı
+    ),
+    alanlar=[CapexAlan(k, ad, kusd * 1000, kaynak=_CA_KAYNAK, not_=n) for k, ad, kusd, n in _CA_ALANLAR_KUSD],
+    source="Cactus Mine Project NI 43-101 Teknik Rapor - Pre-Feasibility Study (M3 Engineering, yayın 17 Kasım 2025, "
+           "geçerlilik 20 Ekim 2025); AACE Class 4 (-%20/+%20); 2025 Q3 fiyatları; USD, kısa ton",
+    notlar=(
+        "Process plant doğrudan toplamı raporda (Tablo 21-3, initial) 335.7M$; ancak tablodaki 18 satırın toplamı 327.8M$ (7.9M$ fark raporun kendi içinde tutarsız, kaynağı bilinmiyor). Alan değerleri satır toplamlarından alındı. Alanlara DAHİL DEĞİL: onsite altyapı "
+        "123.4M$ (Tablo 21-4, APS bağlantısı 49M$ dahil), dolaylı 149.7M$ (Tablo 21-5), gider payı (Tablo 21-6, "
+        "plant+altyapı %18), sahip maliyetleri, arazi ve madencilik. Rapor metnine göre ekipman ve dökme malzeme "
+        "maliyetine %8 nakliye payı dahil; Tablo 21-5'te ayrıca nakliye kalemi de var, çift sayım olup olmadığı "
+        "belirsiz. Kapasite 76,713 st/gün (28 Mst/yıl yığına istif) metrik t/gün'e çevrildi. OPEX $/st metrik "
+        "$/t'a çevrildi. İşleme OPEX'i yalnızca proses (madencilik ve G&A hariç)."
+    ),
+    seviyeler=(),
+    proses="Cu yığın liçi + SX-EW (asit) - flotasyon yok",
+    isleme_opex_usd_t=round(2.53 / _ST_T, 2),
+    opex_kirilim={k: round(v / _ST_T, 2) for k, v in
+                  {"İşçilik": 0.41, "Güç": 1.02, "Reaktif": 0.54, "Aşınma parçaları": 0.02,
+                   "Bakım parçaları": 0.42, "Sarf ve hizmetler": 0.12}.items()},
+)
+
+ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, ENCHI_DATA_POINT, CACTUS_DATA_POINT, LA_MINA_DATA_POINT]
 
 
 def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
@@ -635,7 +751,7 @@ if __name__ == "__main__":
     assert all(p.project != cb.project for p in dogrulanmis_noktalar(seviye="A"))
     ko = estimate_area_capex("kirma_ogutme", 11747)
     print("  kirma_ogutme @11,747 tpd: " + ", ".join(f"{r['project']} {r['scaled_usd']:,.0f}" for r in ko["referanslar"]))
-    assert {r["project"] for r in ko["referanslar"]} == {"Altar Project", "Furnas Project", "Cerro Blanco Project"}
+    assert {r["project"] for r in ko["referanslar"]} == {"Altar Project", "Furnas Project", "Cerro Blanco Project", "Enchi Gold Project"}
     print("  cil @11,747 tpd:", [(r['project'], r['scaled_usd']) for r in estimate_area_capex("cil", 11747)["referanslar"]])
     for kod in ("kirma", "ogutme", "flotasyon", "heap_leach"):
         e = estimate_area_capex(kod, 30000)
