@@ -390,8 +390,8 @@ def cil_boyutlandirma(tpd: float, kullanilabilirlik: float, kati_orani_pct_w: fl
                       bekleme_suresi_h: float, tank_adedi: int, doluluk_orani: float = 0.9) -> Dict[str, float]:
     """CIL devresi için toplam ve tank başına hacim.
 
-    tpd                 : tasarım besleme debisi, kuru t/gün (takvim günü ortalaması)
-    kullanilabilirlik   : 0-1, devre çalışma oranı (saatlik debi = tpd / (24 * kullanilabilirlik))
+    tpd                 : tasarım besleme miktarı, kuru t/gün (takvim günü ortalaması)
+    kullanilabilirlik   : 0-1, devre çalışma oranı (saatlik besleme miktarı = tpd / (24 * kullanilabilirlik))
     kati_orani_pct_w    : pulpta % katı (kütlece)
     sg_kati             : katı özgül ağırlığı (t/m3)
     bekleme_suresi_h    : toplam CIL bekleme süresi (h)
@@ -402,7 +402,7 @@ def cil_boyutlandirma(tpd: float, kullanilabilirlik: float, kati_orani_pct_w: fl
     if not (0 < kati_orani_pct_w < 100):
         raise ValueError("Katı oranı %0-100 arasında olmalı.")
     if sg_kati <= 0 or bekleme_suresi_h <= 0 or tpd <= 0 or tank_adedi < 1:
-        raise ValueError("Debi, özgül ağırlık, bekleme süresi ve tank adedi pozitif olmalı.")
+        raise ValueError("Besleme miktarı, özgül ağırlık, bekleme süresi ve tank adedi pozitif olmalı.")
     if not (0 < doluluk_orani <= 1):
         raise ValueError("Doluluk oranı 0-1 arasında olmalı.")
     tph = tpd / (24.0 * kullanilabilirlik)
@@ -423,7 +423,7 @@ def reaktif_tuketimi(tpd: float, nacn_kg_t: float, kirec_kg_t: float,
                      nacn_fiyat_usd_t: float = 0.0, kirec_fiyat_usd_t: float = 0.0) -> Dict[str, float]:
     """NaCN ve kireç tüketimi; fiyat girilmişse maliyet de verir (fiyat kullanıcı girişidir)."""
     if tpd <= 0 or nacn_kg_t < 0 or kirec_kg_t < 0:
-        raise ValueError("Debi pozitif, tüketimler negatif olmayan sayılar olmalı.")
+        raise ValueError("Besleme miktarı pozitif, tüketimler negatif olmayan sayılar olmalı.")
     nacn_t_gun = tpd * nacn_kg_t / 1000.0
     kirec_t_gun = tpd * kirec_kg_t / 1000.0
     out = {

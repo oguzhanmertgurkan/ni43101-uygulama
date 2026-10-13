@@ -16,6 +16,7 @@ import pandas as pd
 import altair as alt
 
 import leach_tab
+import chain_tab
 
 from grade_recovery_model import (
     predict_recovery,
@@ -87,6 +88,7 @@ ROTALAR = {
     "yigin_cu": "Yığın liçi (Cu, asit + SX-EW)",
     "yigin_au": "Yığın liçi (Au, siyanür + ADR)",
     "gravite": "Gravite / DMS / manyetik",
+    "kombine": "Kombine akış (flotasyon + liç, gravite + liç ...)",
 }
 ROTA_NOTU = {
     "flotasyon": "Flotasyon rotası: tenör-verim, reaktif, flotasyon hücresi ve CAPEX sekmeleri öne çıkar.",
@@ -98,6 +100,9 @@ ROTA_NOTU = {
                 "olarak gelir. Yığın boyutlandırma henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
     "gravite": "Gravite / DMS / manyetik rotası: bu rota için henüz rapor verisi ve ayrı hesap sekmesi yok. "
                "CAPEX alanlarından kırma ve öğütme kullanılabilir.",
+    "kombine": "Kombine akış rotası: aşamaları sırayla kurarsın (ör. flotasyon, ardından konsantre liçi), uygulama "
+               "aşamalar arası kütle ve metal dengesini kurar ve her CAPEX alanını o aşamanın kendi besleme miktarına "
+               "göre ölçekler. Kombine akış kurulumu ve CAPEX 'Kombine Akış' sekmesindedir.",
 }
 ROTA_ALANLARI = {
     "flotasyon": ["kirma", "stok", "ogutme", "flotasyon", "konsantre_koyulastirma",
@@ -106,6 +111,7 @@ ROTA_ALANLARI = {
     "yigin_cu": ["kirma", "stok", "heap_leach", "sx_ew", "reaktif"],
     "yigin_au": ["kirma", "stok", "heap_leach", "karbon_adsorpsiyon", "adr", "reaktif"],
     "gravite": ["kirma", "ogutme", "gravite"],
+    "kombine": [],
 }
 rota = st.radio("Proses rotası", list(ROTALAR), format_func=ROTALAR.get, horizontal=True, key="rota",
                 help="Cevherine ve zenginleştirme yöntemine göre rotanı seç. Seçim sekme sırasını ve CAPEX "
@@ -115,7 +121,7 @@ st.caption(ROTA_NOTU[rota])
 TAB_ADLARI = {
     "verim": "Tenör - Verim", "reaktif": "Reaktif Maliyeti", "capex": "CAPEX Ölçekleme",
     "komin": "Boyut Küçültme", "flot": "Flotasyon Hücresi", "susuz": "Yoğunlaştırma/Susuzlaştırma",
-    "kaynak": "Kaynak Özeti / NSR", "lic": "Liç Kinetiği",
+    "kaynak": "Kaynak Özeti / NSR", "lic": "Liç Kinetiği", "akis": "Kombine Akış",
 }
 TAB_SIRASI = {
     "flotasyon": ["verim", "reaktif", "capex", "komin", "flot", "susuz", "kaynak", "lic"],
@@ -123,6 +129,7 @@ TAB_SIRASI = {
     "yigin_cu": ["capex", "komin", "lic", "reaktif", "kaynak", "verim", "susuz", "flot"],
     "yigin_au": ["capex", "komin", "lic", "reaktif", "kaynak", "verim", "susuz", "flot"],
     "gravite": ["capex", "komin", "susuz", "kaynak", "verim", "reaktif", "flot", "lic"],
+    "kombine": ["akis", "lic", "komin", "reaktif", "susuz", "verim", "flot", "capex", "kaynak"],
 }
 _FLOT_ETIKETLI = {"verim", "reaktif", "flot"}
 
@@ -330,7 +337,10 @@ with T["capex"]:
         help="Enflasyon, ekipman fiyat endeksi ve piyasa koşulları için SİZİN gireceğiniz çarpan. "
              "Uygulama herhangi bir endeks varsaymaz (1.00 = düzeltme yok).",
     )
-    if rota != "flotasyon":
+    if rota == "kombine":
+        st.info("Kombine akışın CAPEX tahmini 'Kombine Akış' sekmesindedir: orada her alan kendi aşamasının besleme "
+                "miktarında ölçeklenir. Bu sekmedeki tek kapasiteli tahminler kombine akış için doğrudan kullanılamaz.")
+    elif rota != "flotasyon":
         st.info("Bu rota için tesis toplamı tahmini yerine aşağıdaki alan bazlı tahmini kullan. "
                 "Tesis toplamı (Altar ve Furnas referanslı) yalnızca flotasyon tesisleri içindir.")
 
@@ -997,3 +1007,7 @@ with T["kaynak"]:
 # ------------------------------------------------------------------
 with T["lic"]:
     leach_tab.render(rota)
+
+if "akis" in T:
+    with T["akis"]:
+        chain_tab.render()

@@ -172,7 +172,7 @@ def render(rota: str):
         st.info("Gravite rotası için henüz ayrı bir hesap sekmesi yok. Bu sekme liç içindir.")
     if rota in ("yigin_cu", "yigin_au"):
         st.info("Yığın liçi için kolon testi verisini (süre gün olarak) kinetik analize verebilirsin. Yığın boyutlandırma "
-                "(pad alanı, sulama debisi) henüz yok, aşağıdaki tank hesabı CIL devresine özgüdür.")
+                "(pad alanı, sulama hızı) henüz yok, aşağıdaki tank hesabı CIL devresine özgüdür.")
 
     d, kisa = _veri_al(rota)
     if d is None:
@@ -312,8 +312,8 @@ def render(rota: str):
     try:
         r = cil_boyutlandirma(tpd, kull / 100.0, kati, sg, bekleme, int(tank), doluluk)
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Katı debisi", f"{r['katı_debisi_t_h']:,.0f} t/h")
-        m2.metric("Pulp debisi", f"{r['pulp_debisi_m3_h']:,.0f} m³/h")
+        m1.metric("Katı besleme miktarı", f"{r['katı_debisi_t_h']:,.0f} t/h")
+        m2.metric("Pulp besleme miktarı", f"{r['pulp_debisi_m3_h']:,.0f} m³/h")
         m3.metric("Toplam tank hacmi", f"{r['toplam_geometrik_hacim_m3']:,.0f} m³")
         m4.metric("Tank başına hacim", f"{r['tank_basina_hacim_m3']:,.0f} m³")
         st.caption(f"Tank başına bekleme süresi: {r['tank_basina_bekleme_h']:.1f} h. "
@@ -340,7 +340,7 @@ def render(rota: str):
 
     # --- CAPEX bağlantısı ---
     st.subheader("Bu rotanın alan bazlı CAPEX referansı")
-    st.caption("Aynı tasarım debisinde, rapor referanslarından alan bazlı doğrudan maliyet aralığı. "
+    st.caption("Aynı tasarım besleme miktarında, rapor referanslarından alan bazlı doğrudan maliyet aralığı. "
                "Dolaylı maliyet ve gider payı hariçtir; ayrıntı için CAPEX Ölçekleme sekmesine bak.")
     satir, alt_t, ust_t = [], 0.0, 0.0
     for kod in CIL_ROTASI_ALANLARI:
