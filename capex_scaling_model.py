@@ -96,6 +96,20 @@ class CapexAlan:
 
 
 @dataclass
+class OpexAlan:
+    """Bir raporun tek bir proses alanı için işletme gideri ($/t besleme, o alanın kendi beslemesi).
+    kapsam: 'tam' = raporun alan toplamı (işçilik, güç, sarf, bakım dahil); 'sarf_guc' = yalnızca sarf + güç
+    (işçilik, bakım, laboratuvar hariç). Farklı kapsamlar toplanmaz."""
+    alan_kodu: str
+    rapor_adi: str
+    usd_t: float
+    kapsam: str = "tam"
+    senaryo: str = ""
+    kaynak: str = ""
+    not_: str = ""
+
+
+@dataclass
 class CapexDataPoint:
     project: str
     capacity_tpd: float
@@ -113,6 +127,8 @@ class CapexDataPoint:
     # İşleme işletme gideri (OPEX) referansı: toplam $/t ve raporun kırılımı
     isleme_opex_usd_t: Optional[float] = None
     opex_kirilim: dict = field(default_factory=dict)
+    # Alan bazlı işletme gideri (varsa)
+    opex_alanlari: list = field(default_factory=list)
 
     @property
     def kapsam_dogrulandi(self) -> bool:
@@ -237,8 +253,7 @@ FURNAS_DATA_POINT = CapexDataPoint(
 # ------------------------------------------------------------------
 # PROSES ALANLARI (unit operation) - rota seçimi için standart alan kodları
 # ------------------------------------------------------------------
-# (kod, etiket, veri_var): veri_var=False olan alanlar için henüz doğrulanmış
-# rapor verisi yok; uygulamada "veri yok" olarak gösterilir.
+# Rapor verisi olmayan alanlar uygulamada "veri yok" olarak gösterilir.
 ALAN_TURLERI = {
     "kirma_ogutme": "Kırma + öğütme (birleşik: kırma, stok, öğütme)",
     "kirma": "Kırma",
@@ -253,7 +268,9 @@ ALAN_TURLERI = {
     "elektrik_kontrol": "Elektrik ve kontrol",
     "boru": "Tesis içi borulama",
     "yardimci": "Pompa, konveyör ve diğer yardımcı (alanı belirsiz)",
-    # Aşağıdaki alanlar için henüz doğrulanmış rapor verisi yok
+    # Aşağıdaki alanların bir kısmı için tek rapordan veri var (heap_leach: Cactus, Santa Fe; sx_ew: Cactus; cil, adr,
+    # on_koyulastirma: Enchi, Cerro Blanco; karbon_adsorpsiyon: Santa Fe). asit_tesisi, gravite, dms ve manyetik için
+    # henüz doğrulanmış rapor verisi yok. Veri durumu için veri_kapsami() ve estimate_area_capex'e bak.
     "heap_leach": "Heap leach (aglomerasyon, istif, pad)",
     "sx_ew": "SX-EW",
     "asit_tesisi": "Sülfürik asit tesisi",
@@ -332,6 +349,16 @@ _FURNAS_ALANLAR_MUSD = [
 FURNAS_DATA_POINT.isleme_opex_usd_t = 8.92    # Furnas PEA, Tablo 21-23
 FURNAS_DATA_POINT.opex_kirilim = {"Kırma": 0.93, "Öğütme": 3.85, "Flotasyon": 1.38, "Tatlı su": 0.07,
                                   "Koyulaştırma ve konsantre filtrasyonu": 0.40, "İdari": 1.11, "Atık": 1.17}
+_FURNAS_OPEX_KAYNAK = "Furnas PEA, Tablo 21-23"
+FURNAS_DATA_POINT.opex_alanlari = [
+    OpexAlan("kirma", "Kırma", 0.93, "tam", kaynak=_FURNAS_OPEX_KAYNAK),
+    OpexAlan("ogutme", "Öğütme", 3.85, "tam", kaynak=_FURNAS_OPEX_KAYNAK),
+    OpexAlan("flotasyon", "Flotasyon", 1.38, "tam", kaynak=_FURNAS_OPEX_KAYNAK),
+    OpexAlan("konsantre_koyulastirma", "Koyulaştırma ve konsantre filtrasyonu", 0.40, "tam", kaynak=_FURNAS_OPEX_KAYNAK,
+             not_="Koyulaştırma ve filtrasyon raporda tek satır; konsantre_filtrasyon alanını ayrıca seçersen çift sayma olur"),
+    OpexAlan("atik_koyulastirma", "Atık", 1.17, "tam", kaynak=_FURNAS_OPEX_KAYNAK,
+             not_="Rapor satırı 'Atık'; atık koyulaştırma/macun tesisini kapsadığı varsayıldı"),
+]
 FURNAS_DATA_POINT.alanlar = [
     CapexAlan(kod, ad, d * 1e6, di * 1e6, g * 1e6,
               kaynak="Furnas PEA, Tablo 21-8 / 21-9",
@@ -446,6 +473,33 @@ ENCHI_DATA_POINT = CapexDataPoint(
     proses="Au siyanürleme (CIL) - flotasyon yok",
     isleme_opex_usd_t=12.61,
 )
+
+# Enchi: Tablo 21.4.7 (sarf maddeleri) ve 21.4.8 (güç) alan bazında, $/yıl; 5.5 Mtpa ile $/t'ye çevrildi.
+# İşçilik, bakım ve laboratuvar alan bazında verilmediği için kapsam yalnızca 'sarf_guc'.
+_EN_OPEX_KAYNAK = "Enchi PFS, Tablo 21.4.7 (sarf) + 21.4.8 (güç)"
+_EN_TPA = 5_500_000.0
+# alan: (senaryo -> (sarf $/yıl, güç $/yıl))
+_EN_OPEX_YILLIK = {
+    "Oksit, P80 53 µm": {
+        "kirma": (153_197, 445_955), "ogutme": (14_633_706, 11_824_319),
+        "on_koyulastirma": (278_857, 231_470), "cil": (9_663_173, 1_816_105), "adr": (3_891_551, 144_927),
+    },
+    # Taze cevherde 'Leaching' sarf satırının $/yıl değeri raporda oksit ile aynı basılmış (9,663,173), ancak
+    # $/t (3.10) ve toplam (44,621,233) tutarlı; 3.10 $/t * 5.5 Mtpa = 17.07M $/yıl kullanıldı.
+    "Taze (blast), P80 53 µm": {
+        "kirma": (793_533, 417_345), "ogutme": (20_513_234, 21_766_323),
+        "on_koyulastirma": (531_967, 231_470), "cil": (3.10 * _EN_TPA, 1_816_105), "adr": (3_891_551, 144_927),
+    },
+}
+_EN_OPEX_ADLARI = {"kirma": "Feed Preparation (kırma/boyutlandırma)", "ogutme": "Milling",
+                   "on_koyulastirma": "Trash Removal & Thickening", "cil": "Leaching", "adr": "Elution & Gold Room"}
+ENCHI_DATA_POINT.opex_alanlari = [
+    OpexAlan(kod, _EN_OPEX_ADLARI[kod], round((sarf + guc) / _EN_TPA, 3), "sarf_guc", senaryo=sen,
+             kaynak=_EN_OPEX_KAYNAK,
+             not_="Milling kalemi gravite devresini içerebilir; raporda ayrılmamış. Taze cevherde Feed Preparation "
+                  "güç satırı kırmayı (0.08 $/t) içerir; stok ve geri alma (0.01 $/t) dahil değil." if kod in ("kirma", "ogutme") else "")
+    for sen, d in _EN_OPEX_YILLIK.items() for kod, (sarf, guc) in d.items()
+]
 
 # ------------------------------------------------------------------
 # Cactus Mine Project - Tablo 21-3 (Process Plant Direct Capital, initial), PFS, M3 Engineering, 17 Kasım 2025
@@ -769,6 +823,25 @@ def estimate_area_capex(
     }
 
 
+def estimate_area_opex(alan_kodu: str, points=None) -> dict:
+    """
+    Bir proses alanının raporlardaki alan bazlı işletme gideri ($/t o alanın beslemesi). Kapsamlar ('tam' ve
+    'sarf_guc') ayrı tutulur ve toplanmaz. Veri yoksa referanslar boştur.
+    """
+    points = ALL_DATA_POINTS if points is None else points
+    refs = []
+    for p in points:
+        if not (p.kapsam_dogrulandi or p.alan_dogrulandi):
+            continue
+        for o in p.opex_alanlari:
+            if o.alan_kodu == alan_kodu and o.usd_t > 0:
+                refs.append({"project": p.project, "base_year": p.base_year, "proses": p.proses,
+                             "rapor_adi": o.rapor_adi, "usd_t": o.usd_t, "kapsam": o.kapsam,
+                             "senaryo": o.senaryo, "kaynak": o.kaynak, "not": o.not_})
+    return {"alan_kodu": alan_kodu, "etiket": ALAN_TURLERI.get(alan_kodu, alan_kodu),
+            "referanslar": refs, "veri_var": bool(refs)}
+
+
 if __name__ == "__main__":
     print("CAPEX Ölçekleme Modeli - Doğrulama\n" + "-" * 55)
     a = ALTAR_DATA_POINT
@@ -831,3 +904,17 @@ if __name__ == "__main__":
         print("  UYARI:", r["warning"])
     r2 = estimate_process_capex(30000, seviye="D", duzeltme_carpani=1.1)
     print(f"\n30,000 tpd (seviye D, x1.10): {r2['estimated_process_capex_usd']:,.0f} USD")
+
+
+    # --- Alan bazlı OPEX ---
+    en = {(o.alan_kodu, o.senaryo): o.usd_t for o in ENCHI_DATA_POINT.opex_alanlari}
+    print("\nEnchi alan OPEX (sarf+güç, $/t):", en)
+    # oksit 53 µm: tabloda sarf toplamı 30.44M, güç toplamı 17.56M (tüm alanlar, çeşitli kalemler dahil)
+    assert abs(en[("cil", "Oksit, P80 53 µm")] - (9_663_173 + 1_816_105) / 5.5e6) < 0.002
+    assert abs(en[("ogutme", "Taze (blast), P80 53 µm")] - (20_513_234 + 21_766_323) / 5.5e6) < 0.002
+    f_toplam = sum(o.usd_t for o in FURNAS_DATA_POINT.opex_alanlari)
+    print(f"Furnas alan OPEX toplamı (5 alan): {f_toplam:.2f} $/t (kırılım toplamı 8.92 içinde tatlı su ve idari hariç)")
+    assert abs(f_toplam - (0.93 + 3.85 + 1.38 + 0.40 + 1.17)) < 1e-9
+    eo = estimate_area_opex("cil")
+    assert eo["veri_var"] and all(r["kapsam"] == "sarf_guc" for r in eo["referanslar"])
+    assert not estimate_area_opex("gravite")["veri_var"]
