@@ -93,6 +93,9 @@ class CapexAlan:
     gider_payi_usd: Optional[float] = None
     kaynak: str = ""
     not_: str = ""
+    # Alanın kendi besleme kapasitesi (t/gün). Verilmezse noktanın cevher kapasitesi kullanılır. Yalnızca raporun
+    # tasarım değerlerinden doğrudan türetilebiliyorsa girilir (ör. konsantre liçi = cevher x tasarım ağırlık verimi).
+    kapasite_tpd: Optional[float] = None
 
 
 @dataclass
@@ -129,6 +132,8 @@ class CapexDataPoint:
     opex_kirilim: dict = field(default_factory=dict)
     # Alan bazlı işletme gideri (varsa)
     opex_alanlari: list = field(default_factory=list)
+    # True: nokta yalnızca alan bazlı OPEX referansıdır (raporda alan bazlı CAPEX yok); CAPEX tablolarına ve grafiğine girmez
+    yalniz_opex: bool = False
 
     @property
     def kapsam_dogrulandi(self) -> bool:
@@ -152,6 +157,8 @@ class CapexDataPoint:
             return "Doğrulanmış"
         if self.alan_dogrulandi:
             return "Yalnızca alan bazlı (tesis toplamına girmez)"
+        if self.yalniz_opex and self.opex_alanlari:
+            return "Yalnızca alan bazlı OPEX referansı (CAPEX yok)"
         return "Belirsiz (hesaba katılmaz)"
 
     def capex_seviye(self, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
@@ -268,14 +275,18 @@ ALAN_TURLERI = {
     "elektrik_kontrol": "Elektrik ve kontrol",
     "boru": "Tesis içi borulama",
     "yardimci": "Pompa, konveyör ve diğer yardımcı (alanı belirsiz)",
-    # Aşağıdaki alanların bir kısmı için tek rapordan veri var (heap_leach: Cactus, Santa Fe; sx_ew: Cactus; cil, adr,
-    # on_koyulastirma: Enchi, Cerro Blanco; karbon_adsorpsiyon: Santa Fe). asit_tesisi, gravite, dms ve manyetik için
+    # Bazı alanlar için az sayıda rapordan veri var (heap_leach: Cactus, Santa Fe; sx_ew: Cactus; cil, adr,
+    # on_koyulastirma: Enchi, Cerro Blanco, Springpole, Tocantinzinho, Lemhi; karbon_adsorpsiyon: Santa Fe; gravite: Tocantinzinho;
+    # cil_kons: Springpole, Tocantinzinho, Courageous Lake; pox: Courageous Lake). asit_tesisi, dms ve manyetik için
     # henüz doğrulanmış rapor verisi yok. Veri durumu için veri_kapsami() ve estimate_area_capex'e bak.
     "heap_leach": "Heap leach (aglomerasyon, istif, pad)",
     "sx_ew": "SX-EW",
     "asit_tesisi": "Sülfürik asit tesisi",
     "on_koyulastirma": "Liç öncesi koyulaştırma ve kaba ayıklama (trash screen)",
-    "cil": "Siyanür liçi, CIP/CIL ve detoks",
+    "cil": "Siyanür liçi, CIP/CIL ve detoks (tüm cevher veya flotasyon atığı)",
+    "cil_kons": "Konsantre siyanür liçi (CIP/CIL veya Merrill-Crowe) ve detoks",
+    "pox": "Konsantre ön işlemi: asidülasyon ve basınçlı oksidasyon (POX)",
+    "karistirmali_lic": "Karıştırmalı (agitated) asit liçi, flotasyon atığı (Cu)",
     "karbon_adsorpsiyon": "Karbon adsorpsiyonu (CIC kolonları, yığın liçi sonrası)",
     "adr": "ADR (karbon geri kazanım) ve rafineri",
     "gravite": "Gravite ayırma (jig, spiral, masa, santrifüj)",
@@ -601,8 +612,287 @@ SANTA_FE_DATA_POINT = CapexDataPoint(
     opex_kirilim={"İşçilik": 1.60, "Güç": 0.41, "Sarf": 0.52, "Reaktif": 2.24, "Bakım": 0.21},
 )
 
+# ------------------------------------------------------------------
+# Springpole Au - PFS (AGP/SRK, First Mining Gold, 26 Şubat 2021), Tablo 21-10 (Process Plant Capital Cost Estimate, CDN$)
+# 30,000 t/gün: kırma, SAG + bilyalı, flotasyon (ağırlık verimi %15), konsantre yeniden öğütme + liç + CIP, flotasyon atığı
+# liçi + CIP, ADR, rafineri, atık koyulaştırma + basınçlı filtre. Maliyet CDN$ olarak hazırlanmış; raporun kendi kuruyla
+# (Tablo 21-6: 1.00 CDN = 0.750 USD) USD'ye çevrildi. Tahmin baz tarihi Q4 2020, AACE Class 4 (-%20/+%30).
+# ------------------------------------------------------------------
+_SP_KAYNAK = "Springpole PFS (AGP/SRK, 26 Şubat 2021), Tablo 21-10 (WBS 3000, ilk yatırım, CDN$M)"
+_SP_KUR = 0.75               # Tablo 21-6
+_SP_TPD = 30_000.0           # Tablo 17-1
+_SP_KONS_TPD = _SP_TPD * 0.15          # Tablo 17-1: final konsantre kütle verimi %15
+_SP_ATIK_TPD = _SP_TPD * (1 - 0.15)
+
+
+def _sp(kod, ad, cad_m, **kw):
+    return CapexAlan(kod, ad, cad_m * _SP_KUR * 1e6, kaynak=_SP_KAYNAK,
+                     not_=f"Rapor değeri CDN${cad_m}M; x{_SP_KUR} (raporun kuru). " + kw.pop("not_", ""), **kw)
+
+
+SPRINGPOLE_DATA_POINT = CapexDataPoint(
+    project="Springpole Gold Project",
+    capacity_tpd=_SP_TPD,
+    base_year=2020,
+    basslik_capex_usd=718_300_000,          # Tablo 21-1: ilk yatırım toplamı (USD), proje geneli
+    kapsam=CapexKapsam(tsf_dahil=False, dis_altyapi_dahil=False, gider_payi_dahil=False, dolayli_dahil=False,
+                       sahip_maliyeti_dahil=False),
+    alanlar=[
+        _sp("kirma", "Crushing, Stockpile, Reclaim (WBS 3100)", 29.7,
+            not_="Kırma, stok ve geri alma tek satırda; stok ayrı verilmemiş."),
+        _sp("ogutme", "Grinding (WBS 3200)", 66.4,
+            not_="SAG + bilyalı değirmen + siklon. Konsantre yeniden öğütme (3 x 3 MW IsaMill) alan ekipman listelerinde "
+                 "geçmiyor; hangi WBS'de olduğu raporda belirtilmemiş. PFS, daha sert cevher verisi için büyük bilyalı değirmen "
+                 "payını gider payına (contingency) koymuş."),
+        _sp("flotasyon", "Flotation (WBS 3300)", 25.5),
+        _sp("cil", "Flotation Tailings Leaching (WBS 3400)", 71.2, kapasite_tpd=_SP_ATIK_TPD,
+            not_=f"Flotasyon atığı liçi + CIP. Besleme = {_SP_TPD:,.0f} x (1 - %15) = {_SP_ATIK_TPD:,.0f} t/gün "
+                 "(raporun tasarım ağırlık verimi %15'inden türetildi)."),
+        _sp("cil_kons", "Concentrate Leaching (WBS 3500)", 60.3, kapasite_tpd=_SP_KONS_TPD,
+            not_=f"Konsantre liçi + CIP. Besleme = {_SP_TPD:,.0f} x %15 = {_SP_KONS_TPD:,.0f} t/gün (raporun tasarım ağırlık "
+                 "verimi %15'inden türetildi)."),
+        _sp("adr", "ADR Plant (WBS 3600)", 15.0),
+        _sp("adr", "Refinery (WBS 3700)", 7.2, not_="Elektrokazanım, altın odası, dökümhane."),
+        _sp("reaktif", "Reagents and Services (WBS 3800)", 10.7),
+        _sp("atik_koyulastirma", "Tailings Filtration (WBS 3900)", 109.7,
+            not_="Yüksek hızlı koyulaştırıcı + basınçlı filtre presler (12 adet) + yükleme konveyörü; kuru istif sahası bu "
+                 "alana dahil değil. Siyanür yok etme (detoks) ünitesinin hangi alanda olduğu raporda ayrıca belirtilmemiş."),
+    ],
+    source="Springpole Gold Project NI 43-101 Teknik Rapor ve Ön Fizibilite Çalışması (AGP Mining Consultants, First Mining "
+           "Gold için), 26 Şubat 2021; AACE Class 4 (-%20/+%30); tahmin baz tarihi Q4 2020; CDN$ ile hazırlanmış, USD'ye "
+           "raporun kuruyla çevrildi",
+    notlar=(
+        "Process plant ilk yatırım doğrudan toplamı CDN$395.7M (USD 296.7M, Tablo 21-1/21-3). Dolaylı maliyet "
+        "(indirects CDN$63.8M, EPCM 50.0M, sahip maliyeti 21.4M) ve gider payı (CDN$107.9M, contingency + management reserve) "
+        "proje düzeyinde, alanlara dağıtılmamış; bu nedenle yalnızca doğrudan alan maliyetleri kullanılır. Raporun sunduğu "
+        "bu akış (flotasyon -> konsantre yeniden öğütme + liç, flotasyon atığı liçi) kombine rota için tek tam referanstır; "
+        "konsantre ve atık liçi için alan bazlı kapasite raporun %15 ağırlık veriminden türetilmiştir."
+    ),
+    seviyeler=(),
+    proses="Au flotasyon + konsantre liçi + flotasyon atığı liçi (CIP)",
+    isleme_opex_usd_t=10.87,        # Tablo 21-2 (USD); CDN$14.50/t x 0.75
+    opex_kirilim={"Reaktif ve sarf": 7.05, "Güç": 2.07, "İşçilik": 0.86, "Bakım": 0.53, "Su arıtma": 0.32,
+                  "Laboratuvar": 0.04, "Mobil ekipman": 0.02},    # Tablo 21-29, CDN$/t x 0.75
+)
+
+# ------------------------------------------------------------------
+# Tocantinzinho Au - FS (GMS/SRK, G Mining Ventures, 9 Şubat 2022), Tablo 21.7 (k USD, geri alınabilir vergiler düşülmüş)
+# 11,890 t/gün granit cevher: kırma, SAG + bilyalı, gravite (KC-QS48 x2 + intensif liç), flotasyon (ağırlık verimi %4.5),
+# yalnızca flotasyon konsantresi CIL'e gider (yeniden öğütme yok, yalnızca yer ayrılmış). Baz tarihi Q1 2022, AACE Class 3.
+# ------------------------------------------------------------------
+_TZ_KAYNAK = "Tocantinzinho FS (GMS/SRK, 9 Şubat 2022), Tablo 21.7 (WBS 600, k USD, geri alınabilir vergiler düşülmüş)"
+_TZ_TPD = 11_890.0                      # Tablo 17.1, nominal günlük kapasite
+_TZ_KONS_TPD = round(_TZ_TPD * 0.045, 1)   # Tablo 17.1: toplam flotasyon ağırlık verimi (granit) %4.5 -> ~535 t/gün
+
+
+def _tz(kod, ad, kusd, **kw):
+    return CapexAlan(kod, ad, kusd * 1e3, kaynak=_TZ_KAYNAK, **kw)
+
+
+TOCANTINZINHO_DATA_POINT = CapexDataPoint(
+    project="Tocantinzinho Gold Project",
+    capacity_tpd=_TZ_TPD,
+    base_year=2022,
+    basslik_capex_usd=457_845_000,          # Tablo 21.1: ilk yatırım toplamı (geri alınabilir vergi ve kredi düşülmüş)
+    kapsam=CapexKapsam(tsf_dahil=False, dis_altyapi_dahil=False, gider_payi_dahil=False, dolayli_dahil=False,
+                       sahip_maliyeti_dahil=False),
+    alanlar=[
+        _tz("kirma", "611 Primary Crusher", 6969),
+        _tz("stok", "612 Ore Reclaim", 4409),
+        _tz("ogutme", "613 Primary Grinding", 18046),
+        _tz("ogutme", "614 Pebble Conveyors", 948),
+        _tz("ogutme", "615 Secondary Grinding (& Cyclone)", 9035),
+        _tz("gravite", "621 Gravity", 1600, not_="2 x KC-QS48 santrifüj konsantratör; siklon altının %40'ını işler."),
+        _tz("gravite", "622 Intensive Leach", 883, not_="Gravite konsantresi için intensif siyanürleme reaktörü (ILR)."),
+        _tz("flotasyon", "631 Rougher & Scavenger Flotation", 7859),
+        _tz("flotasyon", "632 Cleaner Flotation", 1797),
+        _tz("flotasyon", "639 Flotation Services", 1005),
+        _tz("reaktif", "638 Flotation Reagent", 966),
+        _tz("reaktif", "650 Reagents (651-657)", 4487),
+        _tz("on_koyulastirma", "641 Pre-Leach", 1584, kapasite_tpd=_TZ_KONS_TPD,
+            not_="Konsantre liç öncesi koyulaştırıcı (21 m çaplı)."),
+        _tz("cil_kons", "642 CIL (Carbon in Leach)", 5044, kapasite_tpd=_TZ_KONS_TPD,
+            not_=f"Yalnızca flotasyon konsantresi (+ ILR kalıntısı) işlenir. Besleme = {_TZ_TPD:,.0f} x %4.5 = "
+                 f"{_TZ_KONS_TPD:,.0f} t/gün (raporun tasarım ağırlık veriminden türetildi)."),
+        _tz("cil_kons", "644 Cyanide Recovery", 996, kapasite_tpd=_TZ_KONS_TPD),
+        _tz("cil_kons", "645 Detox", 1023, kapasite_tpd=_TZ_KONS_TPD),
+        _tz("adr", "661 ADR", 1022),
+        _tz("adr", "662 Carbon Regeneration", 3726),
+        _tz("adr", "663 Gold Room", 1475),
+        _tz("adr", "664 HCL", 107),
+        _tz("boru", "602 Pipe Rack", 1416),
+        _tz("yardimci", "601 Site Preparation / Road / Berms + 603 Buried Services + 604 ROM Pad", 1046 + 576 + 61),
+        _tz("yardimci", "680 Tailings Management (680, 682-685)", 352 + 98 + 1701 + 2474 + 603,
+            not_="Atık boru hatları ve geri kazanım suyu (FTSF/CTSF); depolama tesislerinin kendisi dahil değil."),
+        _tz("yardimci", "690 Process Plant Services (691-697)", 4731),
+    ],
+    source="Tocantinzinho Gold Project Fizibilite Çalışması NI 43-101 Teknik Rapor (GMS/SRK, G Mining Ventures için), "
+           "efektif tarih 10 Aralık 2021, yayın 9 Şubat 2022; AACE Class 3 (-%10/+%15); baz tarihi Q1 2022; USD",
+    notlar=(
+        "Process plant (WBS 600) doğrudan toplamı $86.0M (geri alınabilir vergiler ve krediler düşülmüş; vergi dahil "
+        "$88.6M, vergi hariç $78.5M). İnşaat dolayları (WBS 700 $55.4M), sahip/genel hizmetler (WBS 800 $57.0M), üretim "
+        "öncesi (WBS 900 $46.3M) ve contingency (WBS 990 $38.3M) proje düzeyinde, alanlara dağıtılmamış. Konsantre yeniden "
+        "öğütme ekipmanı kurulmamış (yalnızca yer ayrılmış). Gravite devresi siklon altının %40'ını işlediği için gravite "
+        "alanının besleme kapasitesi cevher kapasitesi olarak alındı. Bu nokta, küçük ölçekli konsantre CIL için "
+        "(~535 t/gün) gerçek bir referanstır."
+    ),
+    seviyeler=(),
+    proses="Au gravite + flotasyon + konsantre CIL (konsantre ~535 t/gün)",
+    isleme_opex_usd_t=8.83,         # Tablo 21.19, ömür boyu, geri alınamayan vergiler (NRT) dahil
+)
+
+# ------------------------------------------------------------------
+# Courageous Lake Au - PFS/PEA (Ausenco, 5 Ocak 2024; değiştirilmiş 23 Mart 2026), Tablo 21-5 (US$M, ilk yatırım)
+# 7,500 t/gün: kırma, çubuk/bilyalı öğütme, flotasyon + yeniden öğütme (konsantre ağırlık verimi azami %4.2, Au verimi %88),
+# konsantre ön işlemi (asidülasyon + basınçlı oksidasyon, POX), siyanür liçi + CCD + Merrill-Crowe, detoks.
+# Baz tarihi Q3-Q4 2023, AACE Class 4 (-%20/+%25). Değerler raporda tam milyon dolara yuvarlanmış.
+# ------------------------------------------------------------------
+_CL_KAYNAK = "Courageous Lake PFS/PEA (Ausenco, 5 Ocak 2024), Tablo 21-5 (WBS 2000, ilk yatırım, US$M)"
+_CL_TPD = 7_500.0
+_CL_KONS_TPD = round(_CL_TPD * 0.042, 1)       # Tablo 17: genel devre azami konsantre ağırlık verimi %4.2
+
+
+def _cl(kod, ad, musd, **kw):
+    return CapexAlan(kod, ad, musd * 1e6, kaynak=_CL_KAYNAK, **kw)
+
+
+COURAGEOUS_LAKE_DATA_POINT = CapexDataPoint(
+    project="Courageous Lake Project",
+    capacity_tpd=_CL_TPD,
+    base_year=2023,
+    basslik_capex_usd=747_000_000,          # Tablo 21-1: ilk yatırım toplamı
+    kapsam=CapexKapsam(tsf_dahil=False, dis_altyapi_dahil=False, gider_payi_dahil=False, dolayli_dahil=False,
+                       sahip_maliyeti_dahil=False),
+    alanlar=[
+        _cl("kirma", "Crushing (WBS 2100)", 20),
+        _cl("stok", "Stockpile and Reclaim (WBS 2200)", 10),
+        _cl("ogutme", "Grinding (WBS 2300)", 30),
+        _cl("flotasyon", "Flotation and Regrind (WBS 2400)", 19, not_="Konsantre yeniden öğütme bu satıra dahil."),
+        _cl("pox", "Concentrate Pre-Treatment (WBS 2500)", 75, kapasite_tpd=_CL_KONS_TPD,
+            not_=f"Asidülasyon + basınçlı oksidasyon (POX) devresi. Besleme = {_CL_TPD:,.0f} x %4.2 = {_CL_KONS_TPD:,.0f} t/gün "
+                 "(raporun azami konsantre ağırlık veriminden türetildi). Refrakter konsantre."),
+        _cl("cil_kons", "Leaching and Merrill-Crowe (WBS 2600)", 18, kapasite_tpd=_CL_KONS_TPD,
+            not_="Siyanür liçi, CCD, Merrill-Crowe çinko çökeltme ve rafineri (karbon adsorpsiyonu yok)."),
+        _cl("yardimci", "Neutralization, Cyanide Detox and Tailings (WBS 2700)", 4),
+        _cl("yardimci", "Process Plant Services and Common (WBS 2800, yalnızca ilk yatırım)", 27),
+    ],
+    source="Courageous Lake Project ÖFS ve PEA NI 43-101 Teknik Rapor (Ausenco, Valor Gold için), efektif tarih 5 Ocak 2024, "
+           "değiştirilmiş 23 Mart 2026; AACE Class 4 (-%20/+%25); Q3-Q4 2023; US$ (C$ için kur 0.74)",
+    notlar=(
+        "Process plant ilk yatırım doğrudan toplamı $204M (alan satırları yuvarlama nedeniyle $203M eder). Proje dolayları "
+        "($146M), sahip maliyeti ($25M) ve contingency ($105M) proje düzeyinde, alanlara dağıtılmamış. Konsantre liçi, "
+        "POX ile birlikte refrakter konsantre içindir; oksit/serbest altın konsantre liçine doğrudan uygulanmaz. Yardımcı "
+        "alanı 2800'ün sürdürme yatırımı (oksijen tesisi kirası, $48M) kullanılmadı."
+    ),
+    seviyeler=(),
+    proses="Au flotasyon + konsantre POX + siyanür liçi + Merrill-Crowe (konsantre ~315 t/gün)",
+    isleme_opex_usd_t=26.85,        # Tablo 21-21, ömür boyu, US$/t işlenen cevher
+    opex_kirilim={"İşçilik": 6.49, "Bakım": 1.80, "Reaktif ve sarf": 4.51, "Güç": 13.23, "Atık sahası": 0.82},
+)
+
+# ------------------------------------------------------------------
+# Lemhi Au - FS (Ausenco, Freeman Gold, 13 Ağustos 2026), Tablo 21-4 (US$M, ilk yatırım, Faz 1)
+# Tüm cevher siyanür liçi (CIL) + elüsyon; flotasyon yok. Faz 1: 6,849 t/gün (2.5 Mt/yıl), Faz 2: 8,219 t/gün.
+# Kırma devresi baştan Faz 2 kapasitesine göre boyutlandırılmış. Baz tarihi Q1 2026, AACE Class 3 (-%15/+%15).
+# ------------------------------------------------------------------
+_LE_KAYNAK = "Lemhi FS (Ausenco, 13 Ağustos 2026), Tablo 21-4 (WBS 3000, ilk yatırım, US$M)"
+_LE_TPD = 6_849.0
+_LE_TPD_F2 = 8_219.0
+
+
+def _le(kod, ad, musd, **kw):
+    return CapexAlan(kod, ad, musd * 1e6, kaynak=_LE_KAYNAK, **kw)
+
+
+LEMHI_DATA_POINT = CapexDataPoint(
+    project="Lemhi Gold Project",
+    capacity_tpd=_LE_TPD,
+    base_year=2026,
+    basslik_capex_usd=329_700_000,          # Tablo 21-1: ilk yatırım toplamı
+    kapsam=CapexKapsam(tsf_dahil=False, dis_altyapi_dahil=False, gider_payi_dahil=False, dolayli_dahil=False,
+                       sahip_maliyeti_dahil=False),
+    alanlar=[
+        _le("kirma", "Crushing (WBS 3100)", 12.1, kapasite_tpd=_LE_TPD_F2,
+            not_="Kırma devresi Faz 2 işleme hızına (8,219 t/gün) göre boyutlandırılmış (rapor, Bölüm 17.3.2.1)."),
+        _le("ogutme", "Grinding (WBS 3200)", 27.2,
+            not_="Faz 1 ilk yatırımı; üçüncül değirmen (6.0 M$) genişleme yatırımında, buraya dahil değil."),
+        _le("cil", "Leach and Adsorption (WBS 3300)", 16.5),
+        _le("cil", "Detox (WBS 3500)", 10.4),
+        _le("adr", "Elution/Goldroom (WBS 3400)", 14.3),
+        _le("atik_koyulastirma", "Tailings Dewatering (WBS 3600)", 30.8),
+        _le("reaktif", "Reagents (WBS 3700)", 7.6),
+        _le("yardimci", "Services (WBS 3800)", 8.9),
+    ],
+    source="Lemhi Gold Project NI 43-101 Teknik Rapor ve Fizibilite Çalışması (Ausenco, Freeman Gold için), efektif tarih "
+           "29 Haziran 2026, yayın 13 Ağustos 2026; AACE Class 3 (-%15/+%15); Q1 2026 USD",
+    notlar=(
+        "Process plant ilk yatırım doğrudan toplamı $127.8M (Faz 1). Proje dolayları ($40.1M), sahip maliyeti ($8.03M) ve "
+        "contingency/kapanış ($31.8M) proje düzeyinde, alanlara dağıtılmamış. Diğer alanların Faz 1 mi Faz 2 mi "
+        "kapasitesine göre boyutlandırıldığı raporda ayrıca belirtilmemiş; nokta kapasitesi Faz 1 (6,849 t/gün) alındı. İşleme "
+        "işletme gideri: raporun metni ömür boyu ortalamayı $14.49/t veriyor; Tablo 21-16 toplamları (Faz 1 $17.57/t, Faz 2 "
+        "$14.12/t) metindeki Faz 1/Faz 2 değerleriyle ($18.24/$14.85) birebir tutmuyor."
+    ),
+    seviyeler=(),
+    proses="Au tüm cevher siyanür liçi (CIL) - flotasyon yok",
+    isleme_opex_usd_t=14.49,        # Bölüm 21 metni: ömür boyu ortalama
+)
+
+# ------------------------------------------------------------------
+# Kingking Cu-Au - PFS (M3 Engineering, St. Augustine, 29 Temmuz 2025). Yalnızca alan bazlı OPEX (Tablo 21-9, 21-10, 21-11).
+# CAPEX raporda alan bazında verilmemiş (süreç tesisi + genel altyapı tek rakam: $1,638.25M, EPCM/nakliye/gümrük dahil).
+# 60,000 t/gün değirmen (flotasyon + gravite + flotasyon atığı karıştırmalı asit liçi + SX-EW) ve 40,000 t/gün yığın liçi
+# (+ SX-EW). Fiyatlar Q4 2024 USD. İşletme gideri elemanları: işçilik, reaktif, güç, aşınma malzemesi, bakım, sarf.
+# ------------------------------------------------------------------
+_KK_KAYNAK = "Kingking PFS (M3, Temmuz 2025), "
+_KK_NOT_DEGIRMEN = "$/t değirmen cevheri (848.9 Mt, 38 yıl)."
+KINGKING_DATA_POINT = CapexDataPoint(
+    project="Kingking Copper-Gold Project",
+    capacity_tpd=60_000.0,
+    base_year=2024,
+    basslik_capex_usd=1_638_250_000,        # Tablo 21-1: süreç tesisi + genel altyapı (EPCM, nakliye, gümrük dahil); alan kırılımı yok
+    kapsam=CapexKapsam(),
+    alanlar=[],
+    source="Kingking Copper-Gold Project NI 43-101 Teknik Rapor, Ön Fizibilite Çalışması (M3 Engineering, St. Augustine Gold "
+           "and Copper için), efektif tarih 10 Temmuz 2025; Q4 2024 USD",
+    notlar=(
+        "Yalnızca alan bazlı OPEX referansı: raporda alan bazlı CAPEX yok. İşletme gideri alanları $/t o alanın beslemesi "
+        "(değirmen cevheri, yığın liçi cevheri veya liç edilen cevher); işçilik, reaktif, güç, aşınma malzemesi, bakım ve "
+        "sarf dahil ('tam' kapsam). Atık istifleme maliyeti ($3.56/t, 1-20. yıl) dahil değildir."
+    ),
+    seviyeler=(),
+    proses="Cu-Au flotasyon + gravite + atık karıştırmalı asit liçi (SX-EW) + yığın liçi (SX-EW)",
+    isleme_opex_usd_t=5.61,         # Tablo 21-10: değirmen (konsantratör) toplamı, atık istifleme hariç
+    opex_kirilim={"Kırma ve konveyör": 0.38, "Öğütme ve sınıflandırma": 3.48, "Flotasyon ve yeniden öğütme": 0.63,
+                  "Konsantre koyulaştırma, filtrasyon": 0.20, "Atık filtrasyonu": 0.72, "Gravite": 0.01,
+                  "Rafineri": 0.01, "Yardımcı hizmetler": 0.18},
+    opex_alanlari=[
+        OpexAlan("kirma", "Crushing & Conveying", 0.38, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10", not_=_KK_NOT_DEGIRMEN),
+        OpexAlan("ogutme", "Grinding & Classification", 3.48, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10", not_=_KK_NOT_DEGIRMEN),
+        OpexAlan("flotasyon", "Flotation & Regrind", 0.63, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10", not_=_KK_NOT_DEGIRMEN),
+        OpexAlan("konsantre_koyulastirma", "Concentrate Thickening, Filtration & Dewatering", 0.20, "tam",
+                 kaynak=_KK_KAYNAK + "Tablo 21-10", not_=_KK_NOT_DEGIRMEN + " Koyulaştırma + filtrasyon + susuzlaştırma tek satır."),
+        OpexAlan("atik_koyulastirma", "Tailing Filtration", 0.72, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10",
+                 not_=_KK_NOT_DEGIRMEN + " Atık istifleme maliyeti hariç."),
+        OpexAlan("gravite", "Gravity Gold Circuit", 0.01, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10",
+                 not_=_KK_NOT_DEGIRMEN + " Rapor 2 ondalığa yuvarlamış (toplam $9.09M)."),
+        OpexAlan("adr", "Gold Refinery", 0.01, "tam", kaynak=_KK_KAYNAK + "Tablo 21-10",
+                 not_=_KK_NOT_DEGIRMEN + " Yalnızca rafineri; rapor 2 ondalığa yuvarlamış (toplam $10.25M)."),
+        OpexAlan("heap_leach", "Heap Leach & Crushing & Conveying", 2.93, "tam", kaynak=_KK_KAYNAK + "Tablo 21-9",
+                 not_="$/t yığın liçi cevheri (110.5 Mt, 25 yıl). Kırma ve konveyör bu satıra dahil."),
+        OpexAlan("sx_ew", "Solvent Extraction + Electrowinning (yığın liçi)", 0.49 + 1.91, "tam", senaryo="yığın liçi",
+                 kaynak=_KK_KAYNAK + "Tablo 21-9",
+                 not_="SX $0.49 + EW $1.91 /t yığın liçi cevheri. Tank farm ($0.15) ve yardımcı hizmetler ($0.14) hariç."),
+        OpexAlan("karistirmali_lic", "Agitated Tailing Leach", 2.41, "tam", kaynak=_KK_KAYNAK + "Tablo 21-11",
+                 not_="$/t liç edilen değirmen cevheri. Flotasyon atığının karıştırmalı asit liçi (50 kg/t asit, 50 °C testleri)."),
+        OpexAlan("sx_ew", "SX-EW Tailing Leach", 0.27, "tam", senaryo="atık liçi", kaynak=_KK_KAYNAK + "Tablo 21-11",
+                 not_="$/t liç edilen değirmen cevheri (atık liçi PLS'si için SX-EW)."),
+    ],
+    yalniz_opex=True,
+)
+
 ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, ENCHI_DATA_POINT, CACTUS_DATA_POINT,
-                   SANTA_FE_DATA_POINT, LA_MINA_DATA_POINT]
+                   SANTA_FE_DATA_POINT, LA_MINA_DATA_POINT, SPRINGPOLE_DATA_POINT, TOCANTINZINHO_DATA_POINT,
+                   COURAGEOUS_LAKE_DATA_POINT, LEMHI_DATA_POINT, KINGKING_DATA_POINT]
 
 
 def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
@@ -762,7 +1052,9 @@ def alan_dokumu(p: CapexDataPoint, turetilmis: bool = False) -> dict:
     out = {}
     for a in p.alanlar:
         d = out.setdefault(a.alan_kodu, {"dogrudan": 0.0, "dolayli": 0.0, "gider_payi": 0.0,
-                                         "dolayli_var": True, "gider_payi_var": True, "rapor_adlari": []})
+                                         "dolayli_var": True, "gider_payi_var": True, "rapor_adlari": [],
+                                         "_kap": set()})
+        d["_kap"].add(a.kapasite_tpd if a.kapasite_tpd else p.capacity_tpd)
         d["dogrudan"] += a.dogrudan_usd
         if a.dolayli_usd is None:
             d["dolayli_var"] = False
@@ -773,6 +1065,10 @@ def alan_dokumu(p: CapexDataPoint, turetilmis: bool = False) -> dict:
         else:
             d["gider_payi"] += a.gider_payi_usd
         d["rapor_adlari"].append(a.rapor_adi)
+    # Alan kapasitesi: tüm satırlar aynı kapasiteyi veriyorsa o; karışıksa noktanın cevher kapasitesi
+    for d in out.values():
+        kap = d.pop("_kap")
+        d["kapasite_tpd"] = next(iter(kap)) if len(kap) == 1 else p.capacity_tpd
     # Birleşik kırma+öğütme: ayrı satır veren raporlardan türetilir (kırma, stok, öğütme)
     if turetilmis and "kirma_ogutme" not in out:
         parcalar = [out[k] for k in ("kirma", "stok", "ogutme") if k in out]
@@ -781,6 +1077,7 @@ def alan_dokumu(p: CapexDataPoint, turetilmis: bool = False) -> dict:
                 "dogrudan": sum(x["dogrudan"] for x in parcalar), "dolayli": 0.0, "gider_payi": 0.0,
                 "dolayli_var": False, "gider_payi_var": False,
                 "rapor_adlari": ["türetilmiş: kırma + stok + öğütme"],
+                "kapasite_tpd": p.capacity_tpd,
             }
     return out
 
@@ -806,9 +1103,10 @@ def estimate_area_capex(
         d = alan_dokumu(p, turetilmis=True).get(alan_kodu)
         if d is None or d["dogrudan"] <= 0:
             continue
-        olcekli = d["dogrudan"] * (target_capacity_tpd / p.capacity_tpd) ** exponent * duzeltme_carpani
+        kap = d.get("kapasite_tpd") or p.capacity_tpd
+        olcekli = d["dogrudan"] * (target_capacity_tpd / kap) ** exponent * duzeltme_carpani
         refs.append({
-            "project": p.project, "capacity_tpd": p.capacity_tpd, "base_year": p.base_year,
+            "project": p.project, "capacity_tpd": kap, "plant_capacity_tpd": p.capacity_tpd, "base_year": p.base_year,
             "reference_direct_usd": d["dogrudan"], "scaled_usd": round(olcekli, 0),
             "proses": p.proses,
             "rapor_adlari": d["rapor_adlari"],
@@ -831,7 +1129,7 @@ def estimate_area_opex(alan_kodu: str, points=None) -> dict:
     points = ALL_DATA_POINTS if points is None else points
     refs = []
     for p in points:
-        if not (p.kapsam_dogrulandi or p.alan_dogrulandi):
+        if not (p.kapsam_dogrulandi or p.alan_dogrulandi or p.yalniz_opex):
             continue
         for o in p.opex_alanlari:
             if o.alan_kodu == alan_kodu and o.usd_t > 0:
@@ -873,7 +1171,9 @@ if __name__ == "__main__":
     assert all(p.project != cb.project for p in dogrulanmis_noktalar(seviye="A"))
     ko = estimate_area_capex("kirma_ogutme", 11747)
     print("  kirma_ogutme @11,747 tpd: " + ", ".join(f"{r['project']} {r['scaled_usd']:,.0f}" for r in ko["referanslar"]))
-    assert {r["project"] for r in ko["referanslar"]} == {"Altar Project", "Furnas Project", "Cerro Blanco Project", "Enchi Gold Project"}
+    assert {r["project"] for r in ko["referanslar"]} == {"Altar Project", "Furnas Project", "Cerro Blanco Project", "Enchi Gold Project",
+                                                          "Springpole Gold Project", "Tocantinzinho Gold Project",
+                                                          "Courageous Lake Project", "Lemhi Gold Project"}
     print("  cil @11,747 tpd:", [(r['project'], r['scaled_usd']) for r in estimate_area_capex("cil", 11747)["referanslar"]])
     for kod in ("kirma", "ogutme", "flotasyon", "heap_leach"):
         e = estimate_area_capex(kod, 30000)
@@ -917,4 +1217,59 @@ if __name__ == "__main__":
     assert abs(f_toplam - (0.93 + 3.85 + 1.38 + 0.40 + 1.17)) < 1e-9
     eo = estimate_area_opex("cil")
     assert eo["veri_var"] and all(r["kapsam"] == "sarf_guc" for r in eo["referanslar"])
-    assert not estimate_area_opex("gravite")["veri_var"]
+    assert not estimate_area_opex("dms")["veri_var"] and not estimate_area_opex("manyetik")["veri_var"]
+
+    # --- Springpole / Tocantinzinho / Courageous Lake / Lemhi / Kingking (yeni raporlar) ---
+    for p, rapor in ((SPRINGPOLE_DATA_POINT, 296.7e6), (TOCANTINZINHO_DATA_POINT, 86.036e6),
+                     (COURAGEOUS_LAKE_DATA_POINT, 204e6), (LEMHI_DATA_POINT, 127.8e6)):
+        t = sum(a.dogrudan_usd for a in p.alanlar)
+        print(f"{p.project}: alan toplamı {t:,.0f} (rapor ~{rapor:,.0f}); durum: {p.durum}")
+        assert p.alan_dogrulandi and not p.kapsam_dogrulandi and p.capex_seviye("A") is None
+        assert abs(t - rapor) <= max(0.003 * rapor, 1.1e6 if p is COURAGEOUS_LAKE_DATA_POINT else 0.2e6), (p.project, t)
+    # Springpole: raporun kendi kuru (0.75) ve alan başına kapasite
+    sp = alan_dokumu(SPRINGPOLE_DATA_POINT)
+    assert abs(sp["cil_kons"]["dogrudan"] - 60.3e6 * 0.75) < 1 and sp["cil_kons"]["kapasite_tpd"] == 4500.0
+    assert sp["cil"]["kapasite_tpd"] == 25500.0 and sp["flotasyon"]["kapasite_tpd"] == 30000.0
+    assert abs(sp["adr"]["dogrudan"] - (15.0 + 7.2) * 0.75e6) < 1
+    # Tocantinzinho: konsantre CIL ~535 t/gün; satır toplamları raporun grup toplamlarıyla tutuyor
+    tz = alan_dokumu(TOCANTINZINHO_DATA_POINT)
+    assert abs(tz["cil_kons"]["kapasite_tpd"] - 535.1) < 0.2
+    assert abs(tz["kirma"]["dogrudan"] + tz["stok"]["dogrudan"] + tz["ogutme"]["dogrudan"] - 39_407e3) < 1
+    assert abs(tz["gravite"]["dogrudan"] - 2_483e3) < 1 and abs(tz["adr"]["dogrudan"] - 6_330e3) < 1
+    assert abs(tz["on_koyulastirma"]["dogrudan"] + tz["cil_kons"]["dogrudan"] - (8_648e3 - 0)) < 2e3 + 1
+    # Courageous Lake: POX/konsantre alanları 315 t/gün, diğerleri 7,500
+    cl = alan_dokumu(COURAGEOUS_LAKE_DATA_POINT)
+    assert cl["pox"]["kapasite_tpd"] == 315.0 and cl["cil_kons"]["kapasite_tpd"] == 315.0 and cl["ogutme"]["kapasite_tpd"] == 7500.0
+    # Lemhi: kırma Faz 2 kapasitesine göre
+    le = alan_dokumu(LEMHI_DATA_POINT)
+    assert le["kirma"]["kapasite_tpd"] == 8219.0 and le["cil"]["kapasite_tpd"] == 6849.0
+    assert abs(le["cil"]["dogrudan"] - 26.9e6) < 1
+    # Alan kapasitesi ölçeklemeye girer: konsantre liçi 2,000 t/gün hedef
+    ck = estimate_area_capex("cil_kons", 2000.0, exponent=0.6)
+    assert {r["project"] for r in ck["referanslar"]} == {"Springpole Gold Project", "Tocantinzinho Gold Project", "Courageous Lake Project"}
+    r_sp = next(r for r in ck["referanslar"] if r["project"].startswith("Springpole"))
+    assert r_sp["capacity_tpd"] == 4500.0 and r_sp["plant_capacity_tpd"] == 30000.0
+    assert abs(r_sp["scaled_usd"] - 60.3e6 * 0.75 * (2000 / 4500) ** 0.6) < 1
+    r_tz = next(r for r in ck["referanslar"] if r["project"].startswith("Tocantinzinho"))
+    assert abs(r_tz["capacity_tpd"] - 535.1) < 0.2
+    print("  cil_kons @2,000 t/gün:", [(r['project'].replace(' Project', ''), r['capacity_tpd'], round(r['scaled_usd'] / 1e6, 1)) for r in ck["referanslar"]])
+    # POX yalnızca Courageous Lake
+    assert [r["project"] for r in estimate_area_capex("pox", 300.0)["referanslar"]] == ["Courageous Lake Project"]
+    # Gravite CAPEX artık Tocantinzinho'dan
+    assert [r["project"] for r in estimate_area_capex("gravite", 10000.0)["referanslar"]] == ["Tocantinzinho Gold Project"]
+    # Kingking: yalnızca OPEX referansı; CAPEX'e ve nokta listelerine girmez
+    kk = KINGKING_DATA_POINT
+    assert kk.yalniz_opex and not kk.alan_dogrulandi and not kk.kapsam_dogrulandi and "OPEX" in kk.durum
+    assert all(estimate_area_capex(k, 60000.0)["referanslar"] == [] or
+               all(r["project"] != kk.project for r in estimate_area_capex(k, 60000.0)["referanslar"]) for k in ALAN_TURLERI)
+    assert kk not in dogrulanmis_noktalar(seviye="A") and kk not in dogrulanmis_noktalar(seviye="C")
+    ho = estimate_area_opex("heap_leach")
+    assert any(r["project"].startswith("Kingking") and abs(r["usd_t"] - 2.93) < 1e-9 for r in ho["referanslar"])
+    so = estimate_area_opex("sx_ew")
+    assert {r["senaryo"] for r in so["referanslar"]} == {"yığın liçi", "atık liçi"} and all(r["kapsam"] == "tam" for r in so["referanslar"])
+    assert abs(next(r["usd_t"] for r in so["referanslar"] if r["senaryo"] == "yığın liçi") - 2.40) < 1e-9
+    assert estimate_area_opex("karistirmali_lic")["veri_var"] and estimate_area_opex("gravite")["veri_var"]
+    toplam_kk = sum(kk.opex_kirilim.values())
+    assert abs(toplam_kk - 5.61) < 0.015, toplam_kk
+    # Uygulamada gösterilen başlık değil: yalniz_opex işaretli
+    print("\nYeni referans testleri geçti.")

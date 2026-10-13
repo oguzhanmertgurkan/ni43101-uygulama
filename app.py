@@ -79,7 +79,8 @@ st.set_page_config(page_title="Cevher Zenginleştirme CAPEX/OPEX Araçı", layou
 st.title("Cevher Zenginleştirme Tesisi CAPEX/OPEX Karar Destek Aracı")
 st.caption(
     "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, Furnas, Cerro Blanco, Enchi, Cactus, "
-    "Santa Fe) türetilen modellere dayanır. Sadece dahili test/geliştirme amaçlıdır."
+    "Santa Fe, Springpole, Tocantinzinho, Courageous Lake, Lemhi, Kingking) türetilen modellere dayanır. "
+    "Sadece dahili test/geliştirme amaçlıdır."
 )
 
 ROTALAR = {
@@ -98,8 +99,8 @@ ROTA_NOTU = {
                 "Yığın boyutlandırma (pad alanı, sulama) henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
     "yigin_au": "Au yığın liçi rotası: CAPEX alanları kırma, stok, yığın liçi, karbon adsorpsiyonu, ADR ve reaktif "
                 "olarak gelir. Yığın boyutlandırma henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
-    "gravite": "Gravite / DMS / manyetik rotası: bu rota için henüz rapor verisi ve ayrı hesap sekmesi yok. "
-               "CAPEX alanlarından kırma ve öğütme kullanılabilir.",
+    "gravite": "Gravite / DMS / manyetik rotası: ayrı hesap sekmesi yok. Gravite CAPEX alanı için tek rapor verisi var "
+               "(Tocantinzinho); DMS ve manyetik için rapor verisi yok. CAPEX alanlarından kırma ve öğütme kullanılabilir.",
     "kombine": "Kombine akış rotası: aşamaları sırayla kurarsın (ör. flotasyon, ardından konsantre liçi), uygulama "
                "aşamalar arası kütle ve metal dengesini kurar ve her CAPEX alanını o aşamanın kendi besleme miktarına "
                "göre ölçekler. Kombine akış kurulumu ve CAPEX 'Kombine Akış' sekmesindedir.",
@@ -367,7 +368,7 @@ with T["capex"]:
                 "Proses": p.proses,
                 "Kapasite (tpd)": f"{p.capacity_tpd:,.0f}",
                 "Baz yılı": p.base_year,
-                "Başlık CAPEX": f"${p.basslik_capex_usd:,.0f}",
+                "Başlık CAPEX": "-" if p.yalniz_opex else f"${p.basslik_capex_usd:,.0f}",
                 f"Seviye {seviye} CAPEX": "-" if cs is None else f"${cs:,.0f}",
                 "TSF dahil mi": _bayrak(k.tsf_dahil),
                 "Altyapı dahil mi": _bayrak(k.dis_altyapi_dahil),
@@ -475,7 +476,7 @@ with T["capex"]:
                 nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                    "CAPEX (USD)": cs * duzeltme,
                                    "Durum": f"Doğrulanmış (seviye {seviye})"})
-            elif not p.kapsam_dogrulandi and not p.alanlar:
+            elif not p.kapsam_dogrulandi and not p.alanlar and not p.yalniz_opex:
                 nokta_rows.append({"Proje": p.project, "Kapasite (tpd)": p.capacity_tpd,
                                    "CAPEX (USD)": p.basslik_capex_usd,
                                    "Durum": "Kapsamı belirsiz (hesaba katılmaz)"})
@@ -557,6 +558,17 @@ with T["capex"]:
         })
     if satirlar:
         st.dataframe(pd.DataFrame(satirlar), hide_index=True, use_container_width=True)
+        kendi_kap = []
+        for kod in secilen:
+            for r in estimate_area_capex(kod, hedef_kapasite)["referanslar"]:
+                if abs(r["capacity_tpd"] - r["plant_capacity_tpd"]) > 1e-6:
+                    kendi_kap.append(f"{ALAN_TURLERI[kod]} ({r['project'].replace(' Project', '')}: {r['capacity_tpd']:,.0f} t/gün)")
+        if kendi_kap:
+            st.warning(
+                "Bu alanların bazı referansları cevher kapasitesine değil, alanın kendi besleme miktarına (ör. konsantre) bağlıdır: "
+                + "; ".join(kendi_kap) + ". Hedef kapasite olarak o alanın besleme miktarını girmelisin; cevher kapasitesi "
+                "yanlış ölçek verir. Konsantre ve atık miktarını kütle dengesinden hesaplayan 'Kombine Akış' sekmesini kullanman önerilir."
+            )
         carp = (1 + alan_dolayli / 100.0) * (1 + alan_gider / 100.0)
         t1, t2 = st.columns(2)
         t1.metric("Seçili alanlar, doğrudan (en düşük referans)", f"${alt_toplam:,.0f}")
@@ -571,9 +583,10 @@ with T["capex"]:
         st.caption(
             "Referanslar farklı kapsam, bölge ve çalışma sınıfı taşıdığı için iki uç arasındaki fark ölçek etkisi "
             "değildir. Altar değerleri yalnızca ekipman satın alma + montajdır (saha tesisleri hariç); Furnas, Cerro Blanco, "
-            "Enchi ve Cactus değerleri raporların doğrudan maliyetidir (inşaat, boru ve elektrik dahil; Enchi'de "
-            "gider payı bölüm bazında orantılı ayrıştırıldı). Kırma ve öğütmede en yüksek uç genellikle Furnas'tır "
-            "ve diğer referansların belirgin üstündedir."
+            "Enchi, Cactus, Springpole, Tocantinzinho, Courageous Lake ve Lemhi değerleri raporların doğrudan maliyetidir "
+            "(inşaat, boru ve elektrik dahil; Enchi'de gider payı bölüm bazında orantılı ayrıştırıldı; Springpole CDN\\$'dan "
+            "raporun kuruyla çevrildi; Tocantinzinho geri alınabilir vergiler düşülmüş). Kırma ve öğütmede en yüksek uç "
+            "genellikle Furnas'tır ve diğer referansların belirgin üstündedir."
         )
 
     # --- İşleme işletme gideri (OPEX) referansları ---

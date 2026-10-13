@@ -58,7 +58,7 @@ TUR_ALANLARI = {
     "gravite": ["gravite"],
     "dms": ["dms"],
     "manyetik": ["manyetik"],
-    "lic_cil": ["on_koyulastirma", "cil", "adr", "reaktif"],
+    "lic_cil": ["on_koyulastirma", "cil", "cil_kons", "pox", "adr", "reaktif"],
     "lic_yigin_au": ["heap_leach", "karbon_adsorpsiyon", "adr", "reaktif"],
     "lic_yigin_cu": ["heap_leach", "sx_ew", "asit_tesisi", "reaktif"],
 }
@@ -103,15 +103,18 @@ def akim_etiketi(akim: str, asamalar: List[Asama]) -> str:
     return f"{ad} → " + {"kons": "konsantre", "atik": "atık", "cikis": "çıkış"}.get(cins, cins)
 
 
-def varsayilan_alanlar(asama: Asama, konsantre_tuketiliyor: bool) -> list:
-    """Aşama türüne göre varsayılan alanlar."""
+def varsayilan_alanlar(asama: Asama, konsantre_tuketiliyor: bool, onceki_lic: bool = False) -> list:
+    """Aşama türüne göre varsayılan alanlar. onceki_lic=True ise bu liç aşamasından önce başka bir liç aşaması vardır;
+    ADR, reaktif ve liç öncesi koyulaştırma ortak tesis sayılıp yalnızca ilk liç aşamasında varsayılan olarak seçilir
+    (çift sayılmasın diye). Konsantre ile beslenen liç 'cil_kons', diğerleri 'cil' alanını kullanır."""
     if asama.tur == "flotasyon":
         alanlar = ["flotasyon", "atik_koyulastirma"]
         if not konsantre_tuketiliyor:
             alanlar += ["konsantre_koyulastirma", "konsantre_filtrasyon"]
         return alanlar
     if asama.tur == "lic_cil":
-        return ["on_koyulastirma", "cil", "adr", "reaktif"]
+        kod = "cil_kons" if asama.besleme.endswith(":kons") else "cil"
+        return [kod] if onceki_lic else ["on_koyulastirma", kod, "adr", "reaktif"]
     if asama.tur == "lic_yigin_au":
         return ["heap_leach", "karbon_adsorpsiyon", "adr", "reaktif"]
     if asama.tur == "lic_yigin_cu":
@@ -251,8 +254,20 @@ def akis_hesapla(cevher_tpd: float, metaller: List[Metal], asamalar: List[Asama]
     }
 
 
-def _alanlar(a: Asama, tuketilen: set) -> list:
-    return a.alanlar if a.alanlar is not None else varsayilan_alanlar(a, f"{a.uid}:kons" in tuketilen)
+def onceki_lic_mi(asamalar: List[Asama], a: Asama) -> bool:
+    """a'dan önce listede başka bir siyanür liç aşaması var mı."""
+    for x in asamalar:
+        if x is a:
+            return False
+        if x.tur == "lic_cil":
+            return True
+    return False
+
+
+def _alanlar(a: Asama, tuketilen: set, asamalar: Optional[List[Asama]] = None) -> list:
+    if a.alanlar is not None:
+        return a.alanlar
+    return varsayilan_alanlar(a, f"{a.uid}:kons" in tuketilen, onceki_lic_mi(asamalar, a) if asamalar else False)
 
 
 def asama_capex(asamalar: List[Asama], sonuc: dict, exponent: float, duzeltme: float = 1.0,
@@ -267,7 +282,7 @@ def asama_capex(asamalar: List[Asama], sonuc: dict, exponent: float, duzeltme: f
     satirlar, eksik, disarda = [], [], []
     g_alt = g_ust = k_alt = k_ust = 0.0
     for a, s in zip(asamalar, sonuc["asamalar"]):
-        for kod in _alanlar(a, tuketilen):
+        for kod in _alanlar(a, tuketilen, asamalar):
             tpd = s["besleme_tpd"]
             e = estimate_area_capex(kod, tpd, exponent=exponent, duzeltme_carpani=duzeltme)
             etiket = ALAN_TURLERI.get(kod, kod)
@@ -321,7 +336,7 @@ def asama_opex(asamalar: List[Asama], sonuc: dict) -> dict:
     kap = {"tam": {"alt": 0.0, "ust": 0.0, "var": 0}, "sarf_guc": {"alt": 0.0, "ust": 0.0, "var": 0}}
     secili = 0
     for a, s in zip(asamalar, sonuc["asamalar"]):
-        for kod in _alanlar(a, tuketilen):
+        for kod in _alanlar(a, tuketilen, asamalar):
             secili += 1
             e = estimate_area_opex(kod)
             satir = {"asama": a.ad, "alan_kodu": kod, "alan": ALAN_TURLERI.get(kod, kod), "tpd": s["besleme_tpd"]}
@@ -404,6 +419,20 @@ SABLONLAR = {
         cevher_tpd=69_593,
         notlar=["Cactus PFS (M3, 2025): ömür boyu ağırlıklı ortalama tenör %0.517 CuT, ömür boyu toplam bakır verimi %75 (yığın verimliliği "
                 "dahil, 76,713 st/gün = 69,593 t/gün)."]),
+    "Flotasyon + konsantre liçi + atık liçi (Springpole referanslı)": lambda: _sablon(
+        [Metal("Au", "g/t", 0.97)],
+        [_a("k", "Kırma", "kirma"), _a("o", "Öğütme", "ogutme", "k:cikis"),
+         _a("f", "Flotasyon", "flotasyon", "o:cikis", 15.0, Au=None),
+         _a("lk", "Konsantre liçi (CIP)", "lic_cil", "f:kons", None, Au=None),
+         _a("la", "Flotasyon atığı liçi (CIP)", "lic_cil", "f:atik", None, Au=None)],
+        cevher_tpd=30_000,
+        notlar=["Springpole PFS (AGP/SRK, 2021): 30,000 t/gün, ömür boyu ortalama besleme 0.97 g/t Au (Tablo 17-1 tasarım tenörü 1.81 g/t), "
+                "tasarım final konsantre ağırlık verimi %15. Konsantre yeniden öğütülüp liç + CIP'e, flotasyon atığı ayrıca liç + CIP'e gider.",
+                "Flotasyon altın verimi ve iki liçin ekstraksiyonu raporda tek bir tasarım değeri olarak verilmiyor. 16 kompozitte (Tablo 13-22) altının flotasyon "
+                "konsantresine dağılımı %61-84; toplam altının konsantre liçinden geri kazanılan payı %26-80, atık liçinden %13-33; iki liçin toplam verimi "
+                "%66-93 aralığında. Mali modelde verim kükürt tenörüne bağlı. Bu yüzden boş bırakıldı; kendi deney verini gir.",
+                "Gümüş de geri kazanılıyor (5.23 g/t); gerekirse ikinci metal olarak ekle.",
+                "ADR ve reaktifler ortak tesis olduğu için yalnızca ilk liç aşamasında (konsantre liçi) seçili gelir."]),
     "Flotasyon + konsantre liçi (değerleri sen gir)": lambda: _sablon(
         [Metal("Au", "g/t", None)],
         [_a("k", "Kırma", "kirma"), _a("o", "Öğütme", "ogutme", "k:cikis"),
@@ -512,36 +541,74 @@ if __name__ == "__main__":
     # --- CAPEX: aşamanın kendi besleme miktarında, aralık süzmesiyle ---
     c = asama_capex(ast, r, 0.6)
     kap = {(x["asama"], x["alan_kodu"]): x["kapasite_tpd"] for x in c["satirlar"]}
-    assert abs(kap[("Konsantre liçi (CIL)", "cil")] - 1000) < 1e-9
+    assert abs(kap[("Konsantre liçi (CIL)", "cil_kons")] - 1000) < 1e-9          # konsantre ile beslenen liç: cil_kons
     assert abs(kap[("Kırma", "kirma")] - 10_000) < 1e-9 and abs(kap[("Flotasyon", "flotasyon")] - 10_000) < 1e-9
     assert abs(kap[("Flotasyon", "atik_koyulastirma")] - 10_000) < 1e-9     # taban: aşama besleme miktarı
-    cil = next(x for x in c["satirlar"] if x["alan_kodu"] == "cil")
-    assert cil["durum"].startswith("aralık dışı") and cil["min_usd"] is None and cil["kaba_min"] > 0   # 1,000 t/gün: oran ~0.07-0.09
-    assert c["kaba_ust_usd"] > c["ust_usd"] and c["kaba_alt_usd"] <= c["alt_usd"] + sum(
-        x["kaba_min"] for x in c["satirlar"] if x["min_usd"] is None and x["kaba_min"])   # kaba aralık güvenilir aralığı kapsar
-    assert any("Konsantre liçi" in x for x in c["aralik_disi"])
-    # Enchi şablonu, 15,068 t/gün: CIL aralık içi
+    ck = next(x for x in c["satirlar"] if x["alan_kodu"] == "cil_kons")
+    # 1,000 t/gün: Tocantinzinho (535, 1.87x) ve Courageous Lake (315, 3.17x) aralıkta; Springpole (4,500, 0.22x) aralık dışı
+    assert ck["n_ref"] == 3 and ck["n_ici"] == 2 and "1 aralık dışı hariç" in ck["durum"], ck
+    assert ck["min_usd"] is not None and ck["kaba_min"] <= ck["min_usd"] and ck["kaba_max"] >= ck["max_usd"]
+    assert c["kaba_ust_usd"] >= c["ust_usd"] and c["kaba_alt_usd"] <= c["alt_usd"]   # kaba aralık güvenilir aralığı kapsar
+    assert not any("Konsantre siyanür liçi" in x for x in c["aralik_disi"]), c["aralik_disi"]   # yalnız ADR ve reaktif aralık dışı
+    # dar aralık: yalnızca Tocantinzinho
+    c_dar = asama_capex(ast, r, 0.6, oran_araligi=(1.5, 2.0))
+    assert next(x for x in c_dar["satirlar"] if x["alan_kodu"] == "cil_kons")["n_ici"] == 1
+    # aralık hiçbir referansı kapsamıyorsa aralık dışı olarak işaretlenir ve toplama girmez
+    c_yok = asama_capex(ast, r, 0.6, oran_araligi=(5.0, 6.0))
+    ky = next(x for x in c_yok["satirlar"] if x["alan_kodu"] == "cil_kons")
+    assert ky["durum"].startswith("aralık dışı") and ky["min_usd"] is None and ky["kaba_min"] > 0
+    assert any("Konsantre liçi" in x for x in c_yok["aralik_disi"])
+    # aralık genişletilirse üç referans da güvenilir toplama girer
+    c3 = asama_capex(ast, r, 0.6, oran_araligi=(0.05, 20.0))
+    assert next(x for x in c3["satirlar"] if x["alan_kodu"] == "cil_kons")["n_ici"] == 3 and c3["ust_usd"] >= c["ust_usd"]
+    # Enchi şablonu, 15,068 t/gün: CIL aralık içi (Cerro Blanco, Enchi, Lemhi ve Springpole atık liçi), gravite tek referans (Tocantinzinho)
     c2 = asama_capex(s["asamalar"], r3, 0.6)
     cil2 = next(x for x in c2["satirlar"] if x["alan_kodu"] == "cil")
-    assert cil2["min_usd"] is not None and cil2["n_ici"] == 2
-    assert any("Gravite" in e for e in c2["eksik"])                          # gravite verisi yok: toplama girmez
-    # aralık genişletilirse konsantre liçi de güvenilir toplama girer
-    c3 = asama_capex(ast, r, 0.6, oran_araligi=(0.05, 20.0))
-    assert next(x for x in c3["satirlar"] if x["alan_kodu"] == "cil")["min_usd"] is not None and c3["ust_usd"] >= c["ust_usd"]
+    assert cil2["min_usd"] is not None and cil2["n_ici"] == 4, cil2
+    gr2 = next(x for x in c2["satirlar"] if x["alan_kodu"] == "gravite")
+    assert gr2["n_ref"] == 1 and gr2["n_ici"] == 1 and "Tocantinzinho" in gr2["referanslar"]
+    assert not any("Gravite" in e for e in c2["eksik"])
+
+    # --- Springpole şablonu: iki liç aşaması (konsantre + atık), ortak ADR bir kez sayılır ---
+    tpd_sp, ms_sp, ast_sp = tam("Flotasyon + konsantre liçi + atık liçi (Springpole referanslı)", 30_000, None,
+                               {("f", "Au"): 70.0, ("lk", "Au"): 80.0, ("la", "Au"): 70.0})
+    assert tpd_sp == 30_000 and ms_sp[0].tenor == 0.97 and ast_sp[2].agirlik_verimi_pct == 15.0
+    r_sp = akis_hesapla(tpd_sp, ms_sp, ast_sp)
+    by = {x["uid"]: x for x in r_sp["asamalar"]}
+    assert abs(by["lk"]["besleme_tpd"] - 4500) < 1e-9 and abs(by["la"]["besleme_tpd"] - 25500) < 1e-9
+    assert abs(r_sp["toplam_verim_pct"]["Au"] - (0.7 * 80.0 + 0.3 * 70.0)) < 1e-9        # 77.0
+    assert varsayilan_alanlar(ast_sp[3], False, onceki_lic_mi(ast_sp, ast_sp[3])) == ["on_koyulastirma", "cil_kons", "adr", "reaktif"]
+    assert varsayilan_alanlar(ast_sp[4], False, onceki_lic_mi(ast_sp, ast_sp[4])) == ["cil"]
+    c_sp = asama_capex(ast_sp, r_sp, 0.6)
+    adr_rows = [x for x in c_sp["satirlar"] if x["alan_kodu"] == "adr"]
+    assert len(adr_rows) == 1, "ADR yalnızca bir kez sayılmalı"
+    ck_sp = next(x for x in c_sp["satirlar"] if x["alan_kodu"] == "cil_kons")
+    ca_sp = next(x for x in c_sp["satirlar"] if x["alan_kodu"] == "cil")
+    assert ck_sp["n_ref"] == 3 and ck_sp["n_ici"] == 1 and ca_sp["n_ici"] >= 1   # 4,500 t/gün: yalnız Springpole (1.00x) aralıkta; Tocantinzinho 8.4x, Courageous Lake 14.3x dışarıda
+    assert "Springpole" in ck_sp["referanslar"] and "1.00x" in ck_sp["referanslar"].split("Springpole")[1][:40]
 
     # --- OPEX: yalnızca alan bazlı veri olan alanlar ---
     ox = asama_opex(ast, r)
     sat = {(x["asama"], x["alan_kodu"]): x for x in ox["satirlar"]}
     assert sat[("Flotasyon", "flotasyon")]["tam"] is not None and sat[("Flotasyon", "flotasyon")]["sarf_guc"] is None
-    assert sat[("Konsantre liçi (CIL)", "cil")]["sarf_guc"] is not None and sat[("Konsantre liçi (CIL)", "cil")]["tam"] is None
+    assert sat[("Konsantre liçi (CIL)", "cil_kons")]["tam"] is None and sat[("Konsantre liçi (CIL)", "cil_kons")]["sarf_guc"] is None
     assert not ox["toplam"]["tam"]["tam_kapsam"]      # reaktif/stok vb. için alan OPEX'i yok: toplam kısmi
-    o_cil = sat[("Konsantre liçi (CIL)", "cil")]["sarf_guc"]
+    fl = sat[("Flotasyon", "flotasyon")]["tam"]
+    assert abs(fl["usd_t"][0] - 0.63) < 1e-9 and abs(fl["usd_t"][1] - 1.38) < 1e-9       # Kingking 0.63, Furnas 1.38
+    # Enchi şablonu: CIL alanı OPEX'i (sarf+güç, Enchi)
+    ox2 = asama_opex(s["asamalar"], r3)
+    sat2 = {(x["asama"], x["alan_kodu"]): x for x in ox2["satirlar"]}
+    cil_ox = sat2[("CIL", "cil")]
+    assert cil_ox["sarf_guc"] is not None and cil_ox["tam"] is None
+    o_cil = cil_ox["sarf_guc"]
     assert abs(o_cil["usd_t"][0] - 2.087) < 1e-9 and abs(o_cil["usd_t"][1] - 3.43) < 1e-9
-    assert abs(o_cil["usd_yil"][0] - 2.087 * 1000 * 365) < 1e-6
+    assert abs(o_cil["usd_yil"][0] - 2.087 * cil_ox["tpd"] * 365) < 1e-6
 
     # --- Veri kapsamı tablosu ---
     vk = {x["alan_kodu"]: x for x in veri_kapsami()}
-    assert vk["sx_ew"]["n_capex"] == 1 and vk["heap_leach"]["n_capex"] == 2 and vk["gravite"]["n_capex"] == 0
+    assert vk["sx_ew"]["n_capex"] == 1 and vk["heap_leach"]["n_capex"] == 2 and vk["gravite"]["n_capex"] == 1
+    assert vk["cil_kons"]["n_capex"] == 3 and vk["pox"]["n_capex"] == 1 and vk["dms"]["n_capex"] == 0 and vk["manyetik"]["n_capex"] == 0
+    assert vk["karistirmali_lic"]["n_capex"] == 0 and vk["karistirmali_lic"]["n_opex"] == 1 and vk["heap_leach"]["n_opex"] == 1
     print("Kombine akış modeli: tüm testler geçti")
     print(f"  Flotasyon + konsantre liçi (test girişleriyle): toplam Au verimi %{r['toplam_verim_pct']['Au']:.1f}; "
           f"güvenilir CAPEX ${c['alt_usd'] / 1e6:,.1f}M-${c['ust_usd'] / 1e6:,.1f}M, kaba ${c['kaba_alt_usd'] / 1e6:,.1f}M-${c['kaba_ust_usd'] / 1e6:,.1f}M")

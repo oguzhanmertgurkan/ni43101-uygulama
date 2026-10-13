@@ -11,7 +11,7 @@ import streamlit as st
 from capex_scaling_model import ALAN_TURLERI, LITERATUR_USTEL
 from process_chain_model import (
     CEVHER, ASAMA_TURLERI, AYIRMA_TURLERI, LIC_TURLERI, TUR_ALANLARI, SABLONLAR, VARSAYILAN_ORAN_ARALIGI,
-    Metal, Asama, akim_adlari, akim_etiketi, varsayilan_alanlar, dogrula, eksik_girdiler, akis_hesapla,
+    Metal, Asama, akim_adlari, akim_etiketi, varsayilan_alanlar, onceki_lic_mi, dogrula, eksik_girdiler, akis_hesapla,
     asama_capex, asama_opex, veri_kapsami,
 )
 
@@ -115,16 +115,20 @@ def render():
         st.markdown(
             "- **Varsayılan değer yok.** Ağırlık verimi, metal verimi, ekstraksiyon, tenör ve besleme miktarı girilmeden hesap yapılmaz. "
             "Şablonlar yalnızca bir rapordan gelen değerleri (kaynağıyla) getirir; rapor değeri olmayanlar boş kalır.\n"
-            "- **CAPEX referansları tek rotalı tesislerden gelir:** Altar ve Furnas (Cu flotasyonu), Cerro Blanco (Au, CIP, flotasyon yok), "
-            "Enchi (Au, gravite + CIL), Cactus (Cu yığın liçi + SX-EW), Santa Fe (Au yığın liçi + ADR). Kombine bir tesis raporu henüz eklenmedi.\n"
+            "- **CAPEX referansları:** Altar ve Furnas (Cu flotasyonu), Cerro Blanco (Au, CIP), Enchi (Au, gravite + CIL), Lemhi (Au, CIL), "
+            "Cactus (Cu yığın liçi + SX-EW), Santa Fe (Au yığın liçi + ADR) ve konsantre liçli dört rapor: Springpole (flotasyon + konsantre liçi + "
+            "atık liçi), Tocantinzinho (gravite + flotasyon + konsantre CIL), Courageous Lake (flotasyon + konsantre POX + liç). Alan bazlı "
+            "kapasite: konsantre liçi referansları kendi konsantre miktarlarıyla (315-4,500 t/gün) karşılaştırılır, cevher kapasitesiyle değil.\n"
             "- **Ölçek aralığı:** Bir referans yalnızca hedef kapasite referansın 0.25-4 katı içindeyse **güvenilir toplama** girer (aralığı "
             "değiştirebilirsin). Dışındakiler ayrı gösterilir, toplama katılmaz. Bu, güç yasasının uzak ölçeklerde güvenilmez olmasından dolayıdır.\n"
-            "- **Veri olmayan alanlar** (gravite, DMS, manyetik, asit tesisi) toplama girmez ve açıkça işaretlenir; gerçek toplam daha yüksektir.\n"
+            "- **Veri olmayan alanlar** (DMS, manyetik, asit tesisi; gravite ve POX için tek rapor) toplama girmez veya tek referansa dayanır ve açıkça işaretlenir; gerçek toplam daha yüksektir.\n"
             "- **Ölçek tabanı:** Raporlar maliyeti tesis besleme miktarına göre verdiği için her alan, kendi aşamasının besleme miktarında ölçeklenir. "
             "Konsantre/atık kütle çekişi farkları ihmal edilir.\n"
             "- **OPEX** yalnızca raporlarda alan bazlı verilen alanlar için ($/t). İki kapsam ayrıdır ve toplanmaz: "
             "'tam' (Furnas, alan toplamı) ve 'sarf+güç' (Enchi; işçilik, bakım ve laboratuvar hariç). Birim maliyetin ölçekle değişmediği varsayılır.\n"
-            "- Konsantre liçi için küçük ölçekli (yüzlerce t/gün) rapor referansı henüz yok; bu satırlar 'aralık dışı' çıkar."
+            "- **Konsantre liçi** üç referansa dayanır ve bunların ikisi (Tocantinzinho ~535 t/gün, Courageous Lake ~315 t/gün, ikincisi POX'lu) küçük "
+            "ölçeklidir. Courageous Lake refrakter konsantre içindir; liç satırı Merrill-Crowe içerir (karbon adsorpsiyonu yok). Aralıkları kendin yorumla.\n"
+            "- Birden fazla liç aşamasında ADR, reaktif ve liç öncesi koyulaştırma ortak tesis sayılır; varsayılan olarak yalnızca ilk liç aşamasında seçilir."
         )
 
     # ---- Şablon ----
@@ -262,8 +266,9 @@ def render():
     for a in asamalar:
         a.alanlar = st.multiselect(
             f"{a.ad}: alanlar", options=TUR_ALANLARI[a.tur],
-            default=varsayilan_alanlar(a, f"{a.uid}:kons" in tuketilen),
-            format_func=lambda k: ALAN_TURLERI[k], key=f"kz{gen}_{a.uid}_{a.tur}_{int(f'{a.uid}:kons' in tuketilen)}_alan")
+            default=varsayilan_alanlar(a, f"{a.uid}:kons" in tuketilen, onceki_lic_mi(asamalar, a)),
+            format_func=lambda k: ALAN_TURLERI[k],
+            key=f"kz{gen}_{a.uid}_{a.tur}_{int(f'{a.uid}:kons' in tuketilen)}_{int(onceki_lic_mi(asamalar, a))}_{a.besleme.endswith(':kons')}_alan")
     n1, n2, n3, n4 = st.columns(4)
     alan_n = n1.number_input("Ölçekleme üsteli (n)", min_value=0.3, max_value=1.0, value=LITERATUR_USTEL, step=0.01,
                              key="kz_n", help="Genel literatür değeri (veri değil).")
