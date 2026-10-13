@@ -79,7 +79,7 @@ st.set_page_config(page_title="Cevher Zenginleştirme CAPEX/OPEX Araçı", layou
 st.title("Cevher Zenginleştirme Tesisi CAPEX/OPEX Karar Destek Aracı")
 st.caption(
     "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, Furnas, Cerro Blanco, Enchi, Cactus, "
-    "Santa Fe, Springpole, Tocantinzinho, Courageous Lake, Lemhi, Kingking) türetilen modellere dayanır. "
+    "Santa Fe, Springpole, Tocantinzinho, Courageous Lake, Lemhi, Kingking, Segilola, Douta) türetilen modellere dayanır. "
     "Sadece dahili test/geliştirme amaçlıdır."
 )
 

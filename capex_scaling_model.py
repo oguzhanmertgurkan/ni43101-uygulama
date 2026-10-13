@@ -159,6 +159,8 @@ class CapexDataPoint:
             return "Yalnızca alan bazlı (tesis toplamına girmez)"
         if self.yalniz_opex and self.opex_alanlari:
             return "Yalnızca alan bazlı OPEX referansı (CAPEX yok)"
+        if self.yalniz_opex and self.isleme_opex_usd_t is not None:
+            return "Yalnızca işleme OPEX toplamı referansı (alan bazlı CAPEX ve OPEX yok)"
         return "Belirsiz (hesaba katılmaz)"
 
     def capex_seviye(self, seviye: str = VARSAYILAN_SEVIYE) -> Optional[float]:
@@ -890,9 +892,63 @@ KINGKING_DATA_POINT = CapexDataPoint(
     yalniz_opex=True,
 )
 
+# ------------------------------------------------------------------
+# Segilola (Thor Explorations, FS, RPA, 18 Mart 2019) ve Douta (Thor Explorations, PFS, AMC, Mart 2026)
+# Her ikisi de gravite + CIL altın tesisi (Norinco EPC). Raporlarda proses alanı bazlı CAPEX dökümü yok: tesis
+# bölüm toplamı tek kalem. Bu nedenle yalnızca işleme OPEX toplamı referansı olarak girildi; CAPEX hesaba katılmaz.
+# ------------------------------------------------------------------
+SEGILOLA_DATA_POINT = CapexDataPoint(
+    project="Segilola Gold Project",
+    capacity_tpd=round(650_000 / 365, 1),     # tesis anma kapasitesi 650,000 t/yıl (revize tasarım), 365 güne bölündü
+    base_year=2019,                            # rapor tarihi; maliyet baz tarihi raporda ayrıca belirtilmemiş
+    basslik_capex_usd=87_600_000,              # Tablo 21-1 toplam geliştirme harcaması (madencilik, altyapı, sahip maliyeti dahil)
+    kapsam=CapexKapsam(),
+    alanlar=[],
+    source="Segilola Gold Project NI 43-101 Teknik Rapor, Fizibilite Çalışması (RPA, Thor Explorations için), 18 Mart 2019; "
+           "AACE Class 3 (+/-%10); USD",
+    notlar=(
+        "Yalnızca işleme OPEX toplamı referansı. Tesis gravite + CIL (kırma, SAG + bilyalı değirmen, gravite, CIL, "
+        "elüsyon); flotasyon yok. Tablo 21-1'deki 'Process' kalemi $19.8M (anma kapasitesi 650,000 t/yıl) proses alanlarına "
+        "ayrılmamış tek kalemdir ve Norinco EPC sözleşmesinin parçasıdır (altyapı $28.6M, dolaylı $13.0M, TMF $3.7M ve sahip "
+        "maliyeti $11.0M ayrı), bu yüzden alan bazlı CAPEX verisi olarak kullanılmadı. OPEX: Tablo 21-3 (sarf ve aşınma "
+        "malzemesi, bakım, işçilik, güç, laboratuvar); işçilikte keyfe bağlı yıllık prim ($0.83/t) dahil değil."
+    ),
+    seviyeler=(),
+    proses="Au gravite + CIL (flotasyon yok)",
+    isleme_opex_usd_t=18.58,
+    opex_kirilim={"Reaktif ve sarf (aşınma malzemesi dahil)": 6.47, "Bakım": 1.39, "İşçilik": 5.26, "Güç": 4.85, "Laboratuvar": 0.61},
+    yalniz_opex=True,
+)
+
+DOUTA_DATA_POINT = CapexDataPoint(
+    project="Douta Gold Project (Faz 1, oksit)",
+    capacity_tpd=round(4_000_000 / 365, 1),   # Faz 1 tasarım kapasitesi 4 Mt/yıl, 365 güne bölündü
+    base_year=2026,                            # rapor tarihi; maliyetler gerçek (reel) dolarla, enflasyon uygulanmamış
+    basslik_capex_usd=253_500_000,             # Tablo 1.7 Faz 1 toplamı (madencilik, TSF, diğer ve sahip maliyeti dahil)
+    kapsam=CapexKapsam(),
+    alanlar=[],
+    source="Thor Douta Gold Project NI 43-101 Teknik Rapor, Ön Fizibilite Çalışması (AMC Consultants, Thor Explorations için), "
+           "Mart 2026; USD, enflasyon uygulanmamış",
+    notlar=(
+        "Yalnızca işleme OPEX toplamı referansı (Faz 1: oksit ve geçiş cevheri, gravite + CIL). Faz 1 process plant CAPEX "
+        "$177.9M (Tablo 21.3) bölümlere göre (mekanik, inşaat, çelik, boru, E,C&I, genel giderler) verilmiş, proses alanlarına "
+        "ayrılmamış, bu yüzden alan bazlı CAPEX verisi olarak kullanılmadı. Faz 2 (kavurma devresi + yeniden öğütme + küçük "
+        "CIL, 2.4 Mt/yıl taze cevher) için $60.1M de alanlara ayrılmamış. OPEX: Tablo 1.10 / 21.8, $/t cevher; rapor "
+        "tesis atık izleme ve yönetim maliyetini ($0.22/t) işleme maliyetine dahil edildiğini söylüyor, tablo değerine dahil "
+        "olup olmadığı belirsiz. İşçilik, güç ve sarf kırılımı raporda yok."
+    ),
+    seviyeler=(),
+    proses="Au gravite + CIL (Faz 1 oksit); Faz 2 kavurma + CIL ayrı",
+    isleme_opex_usd_t=16.14,
+    opex_kirilim={"Oksit ve geçiş cevheri (Faz 1)": 16.14, "Taze cevher, Baraka (Faz 2)": 17.14,
+                  "Taze cevher, Makosa, kavurma dahil (Faz 2)": 33.35},
+    yalniz_opex=True,
+)
+
 ALL_DATA_POINTS = [ALTAR_DATA_POINT, FURNAS_DATA_POINT, CERRO_BLANCO_DATA_POINT, ENCHI_DATA_POINT, CACTUS_DATA_POINT,
                    SANTA_FE_DATA_POINT, LA_MINA_DATA_POINT, SPRINGPOLE_DATA_POINT, TOCANTINZINHO_DATA_POINT,
-                   COURAGEOUS_LAKE_DATA_POINT, LEMHI_DATA_POINT, KINGKING_DATA_POINT]
+                   COURAGEOUS_LAKE_DATA_POINT, LEMHI_DATA_POINT, KINGKING_DATA_POINT,
+                   SEGILOLA_DATA_POINT, DOUTA_DATA_POINT]
 
 
 def kapsam_oranlari(p: CapexDataPoint) -> Optional[dict]:
@@ -1271,5 +1327,13 @@ if __name__ == "__main__":
     assert estimate_area_opex("karistirmali_lic")["veri_var"] and estimate_area_opex("gravite")["veri_var"]
     toplam_kk = sum(kk.opex_kirilim.values())
     assert abs(toplam_kk - 5.61) < 0.015, toplam_kk
+    # Segilola ve Douta: yalnızca işleme OPEX toplamı; CAPEX ve alan OPEX'ine girmez
+    for tp in (SEGILOLA_DATA_POINT, DOUTA_DATA_POINT):
+        assert tp.yalniz_opex and not tp.alanlar and not tp.opex_alanlari and "işleme OPEX" in tp.durum
+        assert tp not in dogrulanmis_noktalar(seviye="A") and tp not in dogrulanmis_noktalar(seviye="C")
+        assert all(all(r["project"] != tp.project for r in estimate_area_capex(k, tp.capacity_tpd)["referanslar"])
+                   for k in ALAN_TURLERI)
+    assert abs(sum(SEGILOLA_DATA_POINT.opex_kirilim.values()) - 18.58) < 1e-9
+    assert abs(SEGILOLA_DATA_POINT.capacity_tpd - 1780.8) < 0.1 and abs(DOUTA_DATA_POINT.capacity_tpd - 10958.9) < 0.1
     # Uygulamada gösterilen başlık değil: yalniz_opex işaretli
     print("\nYeni referans testleri geçti.")
