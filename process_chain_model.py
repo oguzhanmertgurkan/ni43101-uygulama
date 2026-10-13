@@ -7,7 +7,7 @@ Kapsam
 ------
 - Bir ya da birden çok metal izlenir (ör. Au g/t ve Cu %). Her aşamada metal başına verim girilir.
 - Her aşama bir "besleme" akımı alır: cevher beslemesi ya da önceki bir aşamanın çıkış akımı.
-- Ayırma aşamalarında (flotasyon, gravite, DMS, manyetik) kullanıcı konsantreye giden AĞIRLIK verimini ve
+- Ayırma aşamalarında (flotasyon, gravite) kullanıcı konsantreye giden AĞIRLIK verimini ve
   her metal için konsantreye giden METAL verimini girer. Tenörler bunlardan hesaplanır:
       konsantre tenörü = besleme tenörü * metal verimi / ağırlık verimi
       atık tenörü      = besleme tenörü * (1 - metal verimi) / (1 - ağırlık verimi)
@@ -40,13 +40,17 @@ ASAMA_TURLERI = {
     "ogutme": "Öğütme",
     "flotasyon": "Flotasyon",
     "gravite": "Gravite ayırma",
-    "dms": "Ağır ortam ayırma (DMS)",
-    "manyetik": "Manyetik / elektrostatik ayırma",
     "lic_cil": "Siyanür liçi (CIL/CIP)",
     "lic_yigin_au": "Yığın liçi (Au, siyanür + ADR)",
     "lic_yigin_cu": "Yığın liçi (Cu, asit + SX-EW)",
 }
-AYIRMA_TURLERI = ("flotasyon", "gravite", "dms", "manyetik")
+# Rapor verisi olmadığı için kullanıcıya KAPALI aşama türleri (veri ağacı genişleyince ASAMA_TURLERI, AYIRMA_TURLERI ve
+# TUR_ALANLARI'na geri taşı; capex_scaling_model.KAPALI_ALAN_TURLERI ile birlikte).
+KAPALI_ASAMA_TURLERI = {
+    "dms": "Ağır ortam ayırma (DMS)",
+    "manyetik": "Manyetik / elektrostatik ayırma",
+}
+AYIRMA_TURLERI = ("flotasyon", "gravite")
 LIC_TURLERI = ("lic_cil", "lic_yigin_au", "lic_yigin_cu")
 GECIS_TURLERI = ("kirma", "ogutme")
 
@@ -56,11 +60,9 @@ TUR_ALANLARI = {
     "ogutme": ["ogutme", "yeniden_ogutme"],
     "flotasyon": ["flotasyon", "konsantre_koyulastirma", "konsantre_filtrasyon", "atik_koyulastirma", "reaktif"],
     "gravite": ["gravite"],
-    "dms": ["dms"],
-    "manyetik": ["manyetik"],
     "lic_cil": ["on_koyulastirma", "cil", "cil_kons", "pox", "adr", "reaktif"],
     "lic_yigin_au": ["heap_leach", "karbon_adsorpsiyon", "adr", "reaktif"],
-    "lic_yigin_cu": ["heap_leach", "sx_ew", "asit_tesisi", "reaktif"],
+    "lic_yigin_cu": ["heap_leach", "sx_ew", "reaktif"],
 }
 
 # Referans kapasitesinin bu katları dışındaki referanslar güvenilir toplama girmez
@@ -564,7 +566,7 @@ if __name__ == "__main__":
     # Enchi şablonu, 15,068 t/gün: CIL aralık içi (Cerro Blanco, Enchi, Lemhi ve Springpole atık liçi), gravite tek referans (Tocantinzinho)
     c2 = asama_capex(s["asamalar"], r3, 0.6)
     cil2 = next(x for x in c2["satirlar"] if x["alan_kodu"] == "cil")
-    assert cil2["min_usd"] is not None and cil2["n_ici"] == 4, cil2
+    assert cil2["min_usd"] is not None and cil2["n_ici"] == 5, cil2
     gr2 = next(x for x in c2["satirlar"] if x["alan_kodu"] == "gravite")
     assert gr2["n_ref"] == 1 and gr2["n_ici"] == 1 and "Tocantinzinho" in gr2["referanslar"]
     assert not any("Gravite" in e for e in c2["eksik"])
@@ -606,8 +608,8 @@ if __name__ == "__main__":
 
     # --- Veri kapsamı tablosu ---
     vk = {x["alan_kodu"]: x for x in veri_kapsami()}
-    assert vk["sx_ew"]["n_capex"] == 1 and vk["heap_leach"]["n_capex"] == 2 and vk["gravite"]["n_capex"] == 1
-    assert vk["cil_kons"]["n_capex"] == 3 and vk["pox"]["n_capex"] == 1 and vk["dms"]["n_capex"] == 0 and vk["manyetik"]["n_capex"] == 0
+    assert vk["sx_ew"]["n_capex"] == 2 and vk["heap_leach"]["n_capex"] == 3 and vk["gravite"]["n_capex"] == 1
+    assert vk["cil_kons"]["n_capex"] == 3 and vk["pox"]["n_capex"] == 1 and not ({"dms", "manyetik", "asit_tesisi"} & set(vk))
     assert vk["karistirmali_lic"]["n_capex"] == 0 and vk["karistirmali_lic"]["n_opex"] == 1 and vk["heap_leach"]["n_opex"] == 1
     print("Kombine akış modeli: tüm testler geçti")
     print(f"  Flotasyon + konsantre liçi (test girişleriyle): toplam Au verimi %{r['toplam_verim_pct']['Au']:.1f}; "

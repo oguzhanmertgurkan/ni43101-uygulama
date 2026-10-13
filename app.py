@@ -79,7 +79,7 @@ st.set_page_config(page_title="Cevher Zenginleştirme CAPEX/OPEX Araçı", layou
 st.title("Cevher Zenginleştirme Tesisi CAPEX/OPEX Karar Destek Aracı")
 st.caption(
     "Prototip - NI 43-101 teknik raporlarından (Aranzazu, Altar, Furnas, Cerro Blanco, Enchi, Cactus, "
-    "Santa Fe, Springpole, Tocantinzinho, Courageous Lake, Lemhi, Kingking, Segilola, Douta) türetilen modellere dayanır. "
+    "Santa Fe, Springpole, Tocantinzinho, Courageous Lake, Lemhi, Kingking, Segilola, Douta, Blackwater, Los Azules, Gramalote) türetilen modellere dayanır. "
     "Sadece dahili test/geliştirme amaçlıdır."
 )
 
@@ -88,7 +88,7 @@ ROTALAR = {
     "siyanur": "Siyanür liçi (CIL/CIP)",
     "yigin_cu": "Yığın liçi (Cu, asit + SX-EW)",
     "yigin_au": "Yığın liçi (Au, siyanür + ADR)",
-    "gravite": "Gravite / DMS / manyetik",
+    "gravite": "Gravite",
     "kombine": "Kombine akış (flotasyon + liç, gravite + liç ...)",
 }
 ROTA_NOTU = {
@@ -99,8 +99,8 @@ ROTA_NOTU = {
                 "Yığın boyutlandırma (pad alanı, sulama) henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
     "yigin_au": "Au yığın liçi rotası: CAPEX alanları kırma, stok, yığın liçi, karbon adsorpsiyonu, ADR ve reaktif "
                 "olarak gelir. Yığın boyutlandırma henüz yok; kolon testi verisini liç kinetiği sekmesine verebilirsin.",
-    "gravite": "Gravite / DMS / manyetik rotası: ayrı hesap sekmesi yok. Gravite CAPEX alanı için tek rapor verisi var "
-               "(Tocantinzinho); DMS ve manyetik için rapor verisi yok. CAPEX alanlarından kırma ve öğütme kullanılabilir.",
+    "gravite": "Gravite rotası: ayrı hesap sekmesi yok. Gravite CAPEX alanı için tek rapor verisi var "
+               "(Tocantinzinho). CAPEX alanlarından kırma ve öğütme kullanılabilir.",
     "kombine": "Kombine akış rotası: aşamaları sırayla kurarsın (ör. flotasyon, ardından konsantre liçi), uygulama "
                "aşamalar arası kütle ve metal dengesini kurar ve her CAPEX alanını o aşamanın kendi besleme miktarına "
                "göre ölçekler. Kombine akış kurulumu ve CAPEX 'Kombine Akış' sekmesindedir.",

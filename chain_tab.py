@@ -121,7 +121,7 @@ def render():
             "kapasite: konsantre liçi referansları kendi konsantre miktarlarıyla (315-4,500 t/gün) karşılaştırılır, cevher kapasitesiyle değil.\n"
             "- **Ölçek aralığı:** Bir referans yalnızca hedef kapasite referansın 0.25-4 katı içindeyse **güvenilir toplama** girer (aralığı "
             "değiştirebilirsin). Dışındakiler ayrı gösterilir, toplama katılmaz. Bu, güç yasasının uzak ölçeklerde güvenilmez olmasından dolayıdır.\n"
-            "- **Veri olmayan alanlar** (DMS, manyetik, asit tesisi; gravite ve POX için tek rapor) toplama girmez veya tek referansa dayanır ve açıkça işaretlenir; gerçek toplam daha yüksektir.\n"
+            "- **Gravite ve POX alanları** tek rapora dayanır; verisi olmayan alanlar toplama girmez ve açıkça işaretlenir; gerçek toplam daha yüksektir.\n"
             "- **Ölçek tabanı:** Raporlar maliyeti tesis besleme miktarına göre verdiği için her alan, kendi aşamasının besleme miktarında ölçeklenir. "
             "Konsantre/atık kütle çekişi farkları ihmal edilir.\n"
             "- **OPEX** yalnızca raporlarda alan bazlı verilen alanlar için ($/t). İki kapsam ayrıdır ve toplanmaz: "
